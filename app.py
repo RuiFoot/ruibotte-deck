@@ -197,6 +197,7 @@ def on_detect(mid, info):
     if STORE:
         try:
             STORE.set(f"machine.{mid}.detect", {k: v for k, v in info.items() if k != "launcher"})
+            _DETECTED["t"] = 0.0   # 새로 감지한 도구를 바로 '자동 켜짐'에 반영
         except Exception:
             pass
 
@@ -248,8 +249,49 @@ def remote_profiles_cfg(mid):
     return out
 
 
+_DETECTED = {"t": 0.0, "v": set()}
+
+
+AUTO_RECENT_DAYS = 14   # '자동' 켜짐 기준: 이 기간 안에 쓴 흔적이 있는 도구
+
+
+def detected_anywhere():
+    """최근(AUTO_RECENT_DAYS) 쓴 흔적이 있는 AI 도구 (이 PC + 연결 시험으로 감지한 원격 PC). 30초 캐시."""
+    if time.time() - _DETECTED["t"] < 30:
+        return _DETECTED["v"]
+    cut = time.time() - AUTO_RECENT_DAYS * 86400
+    found = set()
+    for pid in detect_providers(Path.home()):
+        try:
+            if PROVIDERS[pid].data_dir(Path.home()).stat().st_mtime >= cut:
+                found.add(pid)
+        except OSError:
+            pass
+    if STORE:
+        for r in machine_rows():
+            if r["kind"] == "ssh":
+                d = STORE.get(f"machine.{r['id']}.detect") or {}
+                found |= {p for p, t in (d.get("providers") or {}).items() if (t or 0) >= cut}
+    _DETECTED.update(t=time.time(), v=found)
+    return found
+
+
 def enabled_providers():
-    return STORE.enabled_providers(list(PROVIDERS)) if STORE else list(PROVIDERS)
+    """켜진 AI 도구. 사용자가 직접 켜고 끈 적 없는 도구는 '자동': 어느 PC에서든 최근 쓴 흔적이 있으면 켜짐 (안 쓰는 도구는 꺼진 채)."""
+    if not STORE:
+        return list(PROVIDERS)
+    ps = STORE.provider_settings()
+    auto = None
+    out = []
+    for p in PROVIDERS:
+        if p in ps:
+            if ps[p]["enabled"]:
+                out.append(p)
+        else:
+            auto = detected_anywhere() if auto is None else auto
+            if p in auto:
+                out.append(p)
+    return out
 
 
 def store_events(machine_id, pid, account, events):
@@ -406,7 +448,7 @@ def apply_machines():
                                               on_detect=on_detect, on_events=store_events,
                                               since_fn=STORE.last_event_ts if STORE else None,
                                               backfill_fn=backfill_args, on_backfill=backfill_done,
-                                              providers=enabled_providers()).start()
+                                              providers=enabled_providers).start()
                 MACHINE_ROWS[mid] = row
         first = next(iter(rows.values()), None)
         new_primary = first["id"] if first else None
@@ -1520,7 +1562,8 @@ def provider_session(pid: str, sid: str, machine: str = None):
 def get_provider_settings():
     _need_store()
     ps = STORE.provider_settings()
-    return {pid: ps.get(pid, {"enabled": True, "options": {}}) for pid in PROVIDERS}
+    on = set(enabled_providers())
+    return {pid: ps.get(pid) or {"enabled": pid in on, "options": {}, "auto": True} for pid in PROVIDERS}
 
 
 @app.put("/api/providers/{pid}")

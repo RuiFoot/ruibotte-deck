@@ -4,8 +4,9 @@ import type { State } from "../types";
 import { C, api, fmtB, fmtT, shortCpu, usePoll } from "../lib";
 import { Muted } from "./ui";
 import { Overlay } from "./SessionModal";
-import { AddMachine, DisplayAndApp } from "./Settings";
+import { AddMachine, DisplayAndApp, cliLogin } from "./Settings";
 
+const CAN_LOGIN = new Set(["claude", "codex"]);   // 대시보드에서 설치·로그인 창을 열 수 있는 도구
 const TOOLS: [string, string, string][] = [
   ["claude", "Claude Code", "~/.claude"],
   ["codex", "GPT (Codex CLI)", "~/.codex 또는 $CODEX_HOME"],
@@ -17,6 +18,13 @@ export function Wizard({ s, onClose }: { s: State | null; onClose: () => void })
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
   const { data: M } = usePoll<{ machines: { id: string; name: string; kind: string; online: boolean; ssh_target?: string }[] }>(`/api/machines?_=${tick}`, 5000);
+  const { data: PS } = usePoll<Record<string, { enabled: boolean; auto?: boolean }>>(`/api/providers/settings?_=${tick}`, 5000);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const act = async (fn: () => Promise<unknown>, ok?: string) => {
+    setBusy(true); setMsg(null);
+    try { await fn(); if (ok) setMsg({ ok: true, text: ok }); } catch (e) { setMsg({ ok: false, text: String((e as Error).message || e) }); }
+    setBusy(false); setTick((t) => t + 1);
+  };
   const L = s?.local;
   const ai = s?.ai || {};
   const finish = async () => {
@@ -46,21 +54,33 @@ export function Wizard({ s, onClose }: { s: State | null; onClose: () => void })
       title: "AI 도구",
       body: (
         <>
-          <p>이 PC에서 찾은 AI 코딩 도구예요. 각 도구가 남기는 기록 파일을 <b>읽기만</b> 하고, 로그인 토큰은 읽거나 저장하지 않아요.
-            원격 PC를 추가하면 그 PC의 도구도 자동으로 찾아요.</p>
+          <p>최근에 쓴 AI 코딩 도구는 자동으로 켜져요. 각 도구의 기록 파일을 <b>읽기만</b> 하고, 로그인 토큰은 복사·저장하지 않아요.
+            아직 없는 도구는 여기서 바로 설치·로그인할 수 있고, 원격 PC를 추가하면 그 PC의 도구도 자동으로 찾아요.</p>
           {TOOLS.map(([pid, label, path]) => {
             const P = ai[pid];
             const here = !!P && P.machines.includes("local");
             const today = here ? P!.states.local?.usage?.today?.total : null;
+            const on = !!PS?.[pid]?.enabled;
             return (
               <div key={pid} className="mrow">
-                <span className={`dot ${here ? "on" : ""}`} />
+                <span className={`dot ${on ? "on" : ""}`} />
                 <div style={{ flex: 1 }}><div className="nm">{label}</div>
-                  <div className="s">{here ? `감지됨${today != null ? ` · 오늘 ${fmtT(today)} 토큰` : ""}` : `이 PC에서 찾지 못함 (${path})`}
+                  <div className="s">{!on ? "꺼짐 · " : PS?.[pid]?.auto ? "자동으로 켜짐 · " : ""}
+                    {here ? `이 PC에서 사용 중${today != null ? ` · 오늘 ${fmtT(today)} 토큰` : ""}` : `이 PC에서 찾지 못함 (${path})`}
                     {P && !here ? ` · 원격 PC ${P.machines.length}대에서 감지` : ""}</div></div>
+                <div className="btns">
+                  {!here && CAN_LOGIN.has(pid) && (
+                    <button disabled={busy} onClick={() => act(async () => {
+                      await api(`/api/providers/${pid}`, "PUT", { enabled: true });
+                      await cliLogin({ provider: pid, label: "", default: true });
+                    }, "창을 열었어요. 설치(필요하면)와 브라우저 로그인을 마치면 이 도구가 집계돼요.")}>설치·로그인</button>
+                  )}
+                  <button disabled={busy || !PS} onClick={() => act(() => api(`/api/providers/${pid}`, "PUT", { enabled: !on }))}>{on ? "끄기" : "켜기"}</button>
+                </div>
               </div>
             );
           })}
+          {msg && <div style={{ color: msg.ok ? C.green : C.red, fontSize: ".85em", marginTop: ".5em" }}>{msg.text}</div>}
         </>
       ),
     },
@@ -90,7 +110,7 @@ export function Wizard({ s, onClose }: { s: State | null; onClose: () => void })
   ];
   const last = step === steps.length - 1;
   return (
-    <Overlay title="RuiBotte Deck 시작하기" onClose={finish}>
+    <Overlay title="RuiBotte Deck 시작하기" onClose={finish} modal>
       <div className="wizard">
         <div className="steps">{steps.map((_, i) => <span key={i} className={i <= step ? "on" : ""} />)}</div>
         <h2>{step + 1}. {steps[step].title}</h2>

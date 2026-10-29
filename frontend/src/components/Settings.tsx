@@ -193,6 +193,16 @@ interface Slot {
 const CONFIG_ENV: Record<string, string> = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME" };
 const CLI_NAME: Record<string, string> = { claude: "claude", codex: "codex" };
 
+/** CLI 로그인 창 열기. CLI가 없으면 '설치할까요?' → 확인하면 설치 후 같은 창에서 이어서 로그인 */
+export async function cliLogin(body: Record<string, unknown>) {
+  let r = await api<{ ok: boolean; need_install?: boolean; message: string }>("/api/profiles/login", "POST", body);
+  if (r.need_install) {
+    if (!window.confirm(r.message)) throw new Error("설치를 취소했어요");
+    r = await api("/api/profiles/login", "POST", { ...body, install: true });
+  }
+  return r;
+}
+
 const PROVIDER_NOTE: Record<string, string> = {
   claude: "한도: 계정 API → 데스크톱 기록 → 로그 추정", codex: "한도: 로그의 정확한 값", gemini: "한도: 하루 요청 수로 추정",
 };
@@ -208,15 +218,7 @@ function AiManagement() {
   const save = (fn: () => Promise<unknown>, ok?: string) => run(async () => { await fn(); refresh(); }, ok);
   if (error && !data) return <div className="err">{error}</div>;
   if (!data || !provs) return <Muted>불러오는 중…</Muted>;
-  // 로그인: CLI가 없으면 '설치할까요?' → 확인하면 설치 후 같은 창에서 이어서 로그인
-  const loginApi = async (body: Record<string, unknown>) => {
-    let r = await api<{ ok: boolean; need_install?: boolean; message: string }>("/api/profiles/login", "POST", body);
-    if (r.need_install) {
-      if (!window.confirm(r.message)) throw new Error("설치를 취소했어요");
-      r = await api("/api/profiles/login", "POST", { ...body, install: true });
-    }
-    return r;
-  };
+  const loginApi = cliLogin;
   const login = (provider: string, label: string, isDefault = false) => save(
     () => loginApi({ provider, label, default: isDefault }),
     "창을 열었어요. 브라우저에서 로그인을 마치면 그 계정으로 집계돼요 (한 번 사용한 뒤부터).");

@@ -134,7 +134,7 @@ def _app_dir():
     return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
 
 
-BROWSER_PROFILE = _app_dir() / "pc-dashboard-edge"   # 대시보드 전용 브라우저 프로필 (이름은 v1 그대로)
+BROWSER_PROFILE = _app_dir() / "ruibotte-deck-edge"   # 대시보드 전용 브라우저 프로필 (아이콘 캐시 때문에 이름 변경, 예전: pc-dashboard-edge)
 
 
 def _browser():
@@ -175,12 +175,12 @@ def close_windows(quick=False):
     try:
         if IS_WIN:
             ps = ("Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | "
-                  "Where-Object { $_.CommandLine -like '*pc-dashboard-edge*' } | "
+                  "Where-Object { $_.CommandLine -like '*ruibotte-deck-edge*' -or $_.CommandLine -like '*pc-dashboard-edge*' } | "
                   "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
             subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=20,
                            creationflags=NO_WINDOW)
         else:
-            subprocess.run(["pkill", "-f", "pc-dashboard-edge"], capture_output=True, timeout=10)
+            subprocess.run(["pkill", "-f", "ruibotte-deck-edge|pc-dashboard-edge"], capture_output=True, timeout=10)
     except Exception:
         pass
 

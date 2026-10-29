@@ -314,8 +314,9 @@ class RemoteMachine:
                 key = self.key(x["k"])
                 profs.setdefault(pid, []).append({**x, "since": (self.since_fn(key) if self.since_fn else {}).get(pid),
                                                   "backfill": (self.backfill_fn(key)[0] if self.backfill_fn else {}).get(pid)})
+        provs = self.providers() if callable(self.providers) else self.providers   # 연결 때마다 최신 목록
         script = build_agent(self.home or info.get("home"), self.interval, self.sys_interval,
-                             since=since, providers=self.providers, backfill=bf, backfill_days=bf_days, profiles=profs)
+                             since=since, providers=provs, backfill=bf, backfill_days=bf_days, profiles=profs)
         p = self.proc = procjob.popen(_ssh_args(target, 20) + [info["launcher"]], stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         _log(f"machine {self.id}: 연결 시작 {target} (ssh pid {p.pid}, obj {id(self):x})")
