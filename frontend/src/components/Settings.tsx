@@ -601,7 +601,8 @@ export function Settings({ onClose, onWizard }: { onClose: () => void; onWizard?
   // 휴대폰(좁은 화면): iOS 설정처럼 [분류 목록] → 누르면 [그 페이지] → '‹ 설정'으로 돌아감
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
   const [isNarrow, setNarrow] = useState(narrow);
-  const [opened, setOpened] = useState(false);
+  // 다른 곳에서 특정 페이지로 바로 연 경우(업데이트 칩·보안 연결 안내)는 목록 대신 그 페이지부터
+  const [opened, setOpened] = useState(() => { try { const d = sessionStorage.getItem("settings-deep") === "1"; sessionStorage.removeItem("settings-deep"); return d; } catch { return false; } });
   useEffect(() => {
     const m = window.matchMedia("(max-width: 760px)"), f = () => setNarrow(m.matches);
     m.addEventListener("change", f);

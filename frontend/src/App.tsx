@@ -7,6 +7,7 @@ import { SegTabs } from "./components/SegTabs";
 import { AddToHomeHint, FullscreenChip } from "./components/MobileHint";
 import { AlertToasts } from "./components/AlertToasts";
 import { WakeLockChip } from "./components/WakeLock";
+import { SecureUpgrade } from "./components/SecureUpgrade";
 import { MachineView, fromLocal, fromRemote, machineAlert } from "./components/MachineView";
 import type { Machine } from "./components/MachineView";
 import { AiPanel, aiTabs } from "./components/AiPanel";
@@ -232,7 +233,7 @@ export default function App() {
             );
           })()}
           {upd?.newer && (
-            <button className="chip upd" title="새 버전 — 설정 > 정보에서 업데이트" onClick={() => { try { localStorage.setItem("settings-page", "about"); } catch { /* 저장 불가 */ } setShowSettings(true); }}>
+            <button className="chip upd" title="새 버전 — 설정 > 정보에서 업데이트" onClick={() => { try { localStorage.setItem("settings-page", "about"); sessionStorage.setItem("settings-deep", "1"); } catch { /* 저장 불가 */ } setShowSettings(true); }}>
               ⬆ {upd.latest} 업데이트</button>
           )}
           <WakeLockChip />
@@ -241,6 +242,7 @@ export default function App() {
         </div>
       </header>
 
+      <SecureUpgrade onSetup={() => { try { localStorage.setItem("settings-page", "notify"); sessionStorage.setItem("settings-deep", "1"); } catch { /* 저장 불가 */ } setShowSettings(true); }} />
       <AddToHomeHint />
       {error?.includes("토큰") && (
         <div className="a2hs bad">

@@ -663,8 +663,10 @@ async def token_guard(request: Request, call_next):
 
 @app.get("/api/health")
 def health():
-    """start.bat이 서버 기동 여부만 빠르게 확인하는 용도 (작은 응답)"""
-    return {"ok": True}
+    """서버 기동 확인 (작은 응답). https_port: 보안 연결이 켜져 있으면 그 포트 — http 로 연 휴대폰 화면이
+    보안 주소로 옮겨 가도 되는지 시험할 때 씀 (다른 출처에서 부르므로 CORS 허용, 데이터 없음)."""
+    return JSONResponse({"ok": True, "https_port": secure.https_port(CFG["port"]) if lan_on() else None},
+                        headers={"Access-Control-Allow-Origin": "*"})
 
 
 def _v2_state():
