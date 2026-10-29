@@ -8,8 +8,8 @@ Set-Location $root
 $ver = [regex]::Match((Get-Content desktop.py -Raw), 'APP_VERSION = "([0-9.]+)"').Groups[1].Value
 if (-not $ver) { throw 'APP_VERSION not found in desktop.py' }
 Write-Host "version $ver"
-# GitHub Actions 등 py 런처가 없는 곳에서는 python
-$py = if (Get-Command py -ErrorAction SilentlyContinue) { 'py' } else { 'python' }
+# CI(GitHub Actions)는 setup-python 이 고른 python, 이 PC는 py 런처 (러너의 py 는 다른 버전을 고를 수 있음)
+$py = if ($env:CI -or -not (Get-Command py -ErrorAction SilentlyContinue)) { 'python' } else { 'py' }
 
 Write-Host '[1/3] frontend build'
 Push-Location frontend
