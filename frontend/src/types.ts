@@ -138,7 +138,7 @@ export interface State {
   machines?: MachineRow[];
   setup_done?: boolean;
   names?: Record<string, string>;   // PC·계정 폴더 키 -> 표시 이름
-  theme?: { mode: "auto" | "dark" | "light"; light_from: string; dark_from: string };
+  theme?: { mode: "sun" | "auto" | "dark" | "light"; light_from: string; dark_from: string; lat?: number | null; lon?: number | null };
   alerts?: { t: number; kind: string; title: string; message: string }[];
   systems?: Record<string, RemoteState | null>;
   ai?: Record<string, AiProvider>;

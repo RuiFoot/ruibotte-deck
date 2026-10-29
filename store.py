@@ -76,8 +76,9 @@ DEFAULTS = {
     "interval.claude_sec": 3,
     "interval.remote_claude_sec": 5,
     "history.backfill_days": 90,
-    "display.theme": "auto",          # auto(낮 라이트·밤 다크) | dark | light
+    "display.theme": "sun",           # sun(일출~일몰 라이트) | auto(정한 시각) | dark | light
     "display.light_from": "07:00", "display.dark_from": "19:00",
+    "display.lat": None, "display.lon": None,   # 일출·일몰 계산 위치 (없으면 화면이 시간대로 추정)
     "display.monitor": "auto",        # 대시보드 창을 띄울 화면: auto(내장 화면→주 모니터) | primary | 모니터 ID | \\.\DISPLAYn
     "setup.done": None,
     # 알림 켜기/끄기 (alerts.py)

@@ -1,7 +1,7 @@
 ; Inno Setup: RuiBotte Deck 설치 프로그램 (사용자별 설치 — 관리자 권한 불필요, '설정 > 앱'에서 제거 가능)
 ; 빌드: packaging/build.ps1 (먼저 PyInstaller로 dist\RuiBotteDeck 를 만든 뒤 ISCC로 이 파일을 컴파일)
 #define AppName "RuiBotte Deck"
-#define AppVersion "2.0.2"
+#define AppVersion "2.0.3"
 #define AppExe "RuiBotteDeck.exe"
 
 [Setup]
@@ -52,3 +52,13 @@ Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM {#AppExe}"; Flags: runhid
 [UninstallDelete]
 ; 앱이 직접 켠 자동 실행 바로가기도 정리. 기록(DB)은 %LOCALAPPDATA%\PCDashboard 에 남김 (다시 설치하면 이어서 사용)
 Type: files; Name: "{userstartup}\{#AppName}.lnk"
+
+[Code]
+// 업데이트 설치 전: 실행 중인 앱(트레이 + 대시보드 창)을 먼저 끝냄 — 안 끝나면 파일이 바뀌지 않은 채 '설치 완료'가 됨
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var Code: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Sleep(1000);
+  Result := '';
+end;

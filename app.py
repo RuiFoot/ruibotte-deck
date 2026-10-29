@@ -674,8 +674,9 @@ def _v2_state():
     return {"machines": machines, "systems": systems, "ai": ai, "alerts": list(ALERTS.log)[:15],
             "names": _machine_names(),
             "setup_done": bool(STORE.get("setup.done")) if STORE else True,
-            "theme": {"mode": setting("display.theme", "auto"), "light_from": setting("display.light_from", "07:00"),
-                      "dark_from": setting("display.dark_from", "19:00")}}
+            "theme": {"mode": setting("display.theme", "sun"), "light_from": setting("display.light_from", "07:00"),
+                      "dark_from": setting("display.dark_from", "19:00"),
+                      "lat": setting("display.lat", None), "lon": setting("display.lon", None)}}
 
 
 def _fmt_tok(n):
@@ -1111,8 +1112,11 @@ def put_settings(body: dict = Body(...)):
     for k, v in body.items():
         if k.startswith(("retention.", "interval.")) and not (isinstance(v, (int, float)) and v >= 0):
             raise HTTPException(400, f"{k}: 0 이상의 숫자여야 합니다")
-        if k == "display.theme" and v not in ("auto", "dark", "light"):
-            raise HTTPException(400, "display.theme: auto | dark | light")
+        if k == "display.theme" and v not in ("sun", "auto", "dark", "light"):
+            raise HTTPException(400, "display.theme: sun | auto | dark | light")
+        if k in ("display.lat", "display.lon") and v is not None and not (
+                isinstance(v, (int, float)) and abs(v) <= (90 if k.endswith("lat") else 180)):
+            raise HTTPException(400, f"{k}: 위도 -90~90, 경도 -180~180")
         if k in ("display.light_from", "display.dark_from") and not re.fullmatch(r"([01]?\d|2[0-3]):[0-5]\d", str(v)):
             raise HTTPException(400, f"{k}: HH:MM 형식이어야 합니다")
     for k, v in body.items():

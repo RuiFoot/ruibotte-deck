@@ -46,20 +46,20 @@ export default function App() {
   const { state: s, error } = useDashboardState(2000);
   const clock = useClock();
   // 테마: 설정이 오기 전엔 마지막 테마, 이후 설정(자동이면 시각)대로. 렌더 전에 바꿔야 차트 색(C)도 같이 바뀜
-  type ThemeMode = "auto" | "dark" | "light";
+  type ThemeMode = "sun" | "auto" | "dark" | "light";
   const [modeNow, setModeNow] = useState<ThemeMode | null>(null);   // 헤더에서 막 바꾼 값 (서버 반영 전까지)
-  const savedCfg = s?.theme ?? store.get<{ mode: ThemeMode; light_from: string; dark_from: string } | undefined>("theme-cfg", undefined);
+  const savedCfg = s?.theme ?? store.get<{ mode: ThemeMode; light_from: string; dark_from: string; lat?: number | null; lon?: number | null } | undefined>("theme-cfg", undefined);
   const themeCfg = modeNow ? { ...(savedCfg || {}), mode: modeNow } : savedCfg;
-  const themeMode: ThemeMode = themeCfg?.mode || "auto";
+  const themeMode: ThemeMode = themeCfg?.mode || "sun";
   const theme = themeFor(themeCfg, clock);
   applyTheme(theme);
   useEffect(() => { if (modeNow && s?.theme?.mode === modeNow) setModeNow(null); }, [s?.theme?.mode, modeNow]);
   const cycleTheme = () => {
-    const next: ThemeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "auto";
+    const next: ThemeMode = themeMode === "sun" || themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "sun";
     setModeNow(next);
     api("/api/settings", "PUT", { "display.theme": next }).catch(() => { /* 서버가 예전 버전이면 이 화면에만 적용 */ });
   };
-  useEffect(() => { if (s?.theme) store.set("theme-cfg", s.theme); }, [s?.theme?.mode, s?.theme?.light_from, s?.theme?.dark_from]);
+  useEffect(() => { if (s?.theme) store.set("theme-cfg", s.theme); }, [s?.theme?.mode, s?.theme?.light_from, s?.theme?.dark_from, s?.theme?.lat, s?.theme?.lon]);
 
   const [auto, setAuto] = useState(() => store.get("auto", true));
   // 영역별 고정: 자동 넘김이 켜져 있어도 그 영역은 지금 탭에 머묾
@@ -202,8 +202,9 @@ export default function App() {
           <span className={`chip ${auto ? "on" : ""}`} onClick={() => { const v = !auto; setAuto(v); store.set("auto", v); lastTurn.current = Date.now(); setTurn((t) => t + 1); }}>
             <span className="d" />{auto ? `자동 넘김 ${AUTO_SEC}초${paused ? " · 멈춤" : ""}` : "자동 넘김 꺼짐"}
           </span>
-          <button className="chip" title="테마 바꾸기: 자동 → 라이트 → 다크" onClick={cycleTheme}>
-            {themeMode === "auto" ? `◐ 자동 · ${theme === "light" ? "낮" : "밤"}` : themeMode === "light" ? "☀ 라이트" : "☾ 다크"}
+          <button className="chip" title="테마 바꾸기: 일출·일몰 → 라이트 → 다크" onClick={cycleTheme}>
+            {themeMode === "sun" ? `◐ 일출·일몰 · ${theme === "light" ? "낮" : "밤"}` : themeMode === "auto" ? `◐ 시간 · ${theme === "light" ? "낮" : "밤"}`
+              : themeMode === "light" ? "☀ 라이트" : "☾ 다크"}
           </button>
           <span className={`chip ${error || errs.length ? "bad" : s ? "ok" : ""}`} title={errs.map((k) => `${k}: ${(s?.errors[k] || "").split("\n").slice(-2).join(" ")}`).join("\n")}>
             <span className="d" />{error ? "서버 연결 끊김" : errs.length ? `수집 오류 ${errs.length}건` : s ? "실시간" : "연결 중"}

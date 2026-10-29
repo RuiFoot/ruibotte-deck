@@ -599,3 +599,42 @@ select.g-in { text-align: left; max-width: 22em; cursor: pointer; }
 :root[data-theme="light"] .seg button.on { color: var(--text); }
 .about { flex-direction: column; text-align: center; gap: .5em; margin: .4em 0 1.6em; }
 .about img { width: 5em; height: 5em; }
+
+/* ===== 설정 · Liquid Glass (iOS 26 방식): 반투명 유리 + 뒤 흐림 + 가장자리 빛 + 캡슐 컨트롤 ===== */
+:root { --glass: rgba(28, 28, 32, .52); --glass-cell: rgba(255, 255, 255, .06); --glass-edge: rgba(255, 255, 255, .16);
+  --glass-hi: rgba(255, 255, 255, .22); --glass-shadow: 0 30px 90px rgba(0, 0, 0, .55); }
+:root[data-theme="light"] { --glass: rgba(246, 247, 250, .55); --glass-cell: rgba(255, 255, 255, .55); --glass-edge: rgba(255, 255, 255, .75);
+  --glass-hi: rgba(255, 255, 255, .95); --glass-shadow: 0 30px 80px rgba(30, 40, 70, .25); }
+.overlay:has(.settings-sheet) { background: rgba(0, 0, 0, .18); backdrop-filter: none; }
+.settings-sheet { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 26px;
+  backdrop-filter: blur(42px) saturate(190%); -webkit-backdrop-filter: blur(42px) saturate(190%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 .5px rgba(255,255,255,.06), var(--glass-shadow); }
+.settings-sheet .sheet-head, .settings-sheet .st-side, .settings-sheet .st-main { background: transparent; }
+.settings-sheet .sheet-head { border-bottom-color: var(--glass-edge); }
+.settings-sheet .sheet-head .x { background: var(--glass-cell); border: 1px solid var(--glass-edge); backdrop-filter: blur(12px); }
+.settings-sheet .st-side { border-right-color: var(--glass-edge); }
+.settings-sheet .st-side button { border-radius: 14px; }
+.settings-sheet .st-side button.on { color: #fff;
+  background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%), var(--ios-blue);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,0,0,.12), 0 4px 14px color-mix(in srgb, var(--ios-blue) 40%, transparent); }
+.settings-sheet .st-ic { border-radius: .55em; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(0,0,0,.15);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,0) 60%); }
+.settings-sheet .g-list { background: var(--glass-cell); border: 1px solid var(--glass-edge); border-radius: 20px;
+  backdrop-filter: blur(24px) saturate(170%); -webkit-backdrop-filter: blur(24px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 6px 22px rgba(0,0,0,.08); }
+.settings-sheet .g-row + .g-row::before { left: 1.2em; right: 1.2em; border-top-color: var(--glass-edge); opacity: .7; }
+.settings-sheet .g-btn { border-radius: 99px; padding: .32em 1em; background: var(--glass-cell); border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-hi); backdrop-filter: blur(10px); }
+.settings-sheet .g-btn.primary { background: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 60%), var(--ios-blue); border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 3px 10px color-mix(in srgb, var(--ios-blue) 35%, transparent); }
+.settings-sheet .g-btn.danger { background: rgba(255,69,58,.14); border-color: rgba(255,69,58,.3); }
+.settings-sheet .g-in { border-radius: 99px; padding: .3em .8em; }
+.settings-sheet .seg { border-radius: 99px; padding: 3px; background: var(--glass-cell); border: 1px solid var(--glass-edge); box-shadow: inset 0 1px 2px rgba(0,0,0,.12); }
+.settings-sheet .seg button { border-radius: 99px; }
+.settings-sheet .seg button.on { color: var(--text); background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.18));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 2px 8px rgba(0,0,0,.18); }
+:root:not([data-theme="light"]) .settings-sheet .seg button.on { background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.08)); color: #fff; }
+.settings-sheet .sw { box-shadow: inset 0 1px 2px rgba(0,0,0,.25); }
+.settings-sheet .sw.on { background: linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,0) 60%), var(--ios-green); }
+.settings-sheet .sw::after { background: linear-gradient(180deg, #fff, #f1f1f4); box-shadow: 0 2px 6px rgba(0,0,0,.28), inset 0 -1px 1px rgba(0,0,0,.06); }
+.settings-sheet .g-val { font-size: .88em; color: var(--dim); font-variant-numeric: tabular-nums; }

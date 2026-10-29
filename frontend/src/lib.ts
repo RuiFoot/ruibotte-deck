@@ -33,10 +33,65 @@ export function applyTheme(t: Theme) {
 const DARK_START: [Stops, [number, number, number]][] = [];
 /** 라이트 모드에서 시작 색을 밝게 바꿀 척도 등록 (lib 아래쪽 정의 뒤에 호출) */
 const darkStart = (...ss: Stops[]) => ss.forEach((s) => DARK_START.push([s, s[0][1]]));
-/** 설정(auto|dark|light)과 지금 시각으로 실제 테마 결정. auto = light_from~dark_from 사이 라이트 */
-export function themeFor(cfg: { mode?: string; light_from?: string; dark_from?: string } | undefined, now: Date): Theme {
-  const mode = cfg?.mode || "auto";
+export interface ThemeCfg { mode?: string; light_from?: string; dark_from?: string; lat?: number | null; lon?: number | null }
+
+// 위치를 정하지 않았을 때: PC 시간대의 대표 도시 좌표 (없으면 UTC 시차로 경도만 어림)
+const TZ_COORDS: Record<string, [number, number]> = {
+  "Asia/Seoul": [37.57, 126.98], "Asia/Tokyo": [35.68, 139.69], "Asia/Shanghai": [31.23, 121.47], "Asia/Taipei": [25.03, 121.57],
+  "Asia/Hong_Kong": [22.32, 114.17], "Asia/Singapore": [1.35, 103.82], "Asia/Kolkata": [28.61, 77.21], "Europe/London": [51.51, -0.13],
+  "Europe/Paris": [48.86, 2.35], "Europe/Berlin": [52.52, 13.4], "America/New_York": [40.71, -74.01], "America/Chicago": [41.88, -87.63],
+  "America/Denver": [39.74, -104.99], "America/Los_Angeles": [34.05, -118.24], "Australia/Sydney": [-33.87, 151.21],
+};
+export function themeCoords(cfg?: ThemeCfg): { lat: number; lon: number; guessed: boolean } {
+  if (cfg?.lat != null && cfg?.lon != null) return { lat: cfg.lat, lon: cfg.lon, guessed: false };
+  let tz = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* 알 수 없음 */ }
+  const c = TZ_COORDS[tz];
+  return c ? { lat: c[0], lon: c[1], guessed: true } : { lat: 37, lon: -new Date().getTimezoneOffset() / 4, guessed: true };
+}
+
+/** 그날의 일출·일몰 시각 (천문 계산, 지평선 보정 90.833°). 백야·극야면 null */
+export function sunTimes(day: Date, lat: number, lon: number): { rise: Date | null; set: Date | null; polar?: "day" | "night" } {
+  const rad = Math.PI / 180, deg = 180 / Math.PI;
+  const y = day.getFullYear(), m = day.getMonth(), d = day.getDate();
+  const N = Math.floor((Date.UTC(y, m, d) - Date.UTC(y, 0, 0)) / 86400000);
+  const lngHour = lon / 15;
+  const calc = (rising: boolean): Date | "day" | "night" => {
+    const t = N + ((rising ? 6 : 18) - lngHour) / 24;
+    const M = 0.9856 * t - 3.289;
+    let L = M + 1.916 * Math.sin(M * rad) + 0.020 * Math.sin(2 * M * rad) + 282.634;
+    L = ((L % 360) + 360) % 360;
+    let RA = deg * Math.atan(0.91764 * Math.tan(L * rad));
+    RA = ((RA % 360) + 360) % 360;
+    RA = (RA + (Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90)) / 15;
+    const sinDec = 0.39782 * Math.sin(L * rad), cosDec = Math.cos(Math.asin(sinDec));
+    const cosH = (Math.cos(90.833 * rad) - sinDec * Math.sin(lat * rad)) / (cosDec * Math.cos(lat * rad));
+    if (cosH > 1) return "night";
+    if (cosH < -1) return "day";
+    const H = (rising ? 360 - deg * Math.acos(cosH) : deg * Math.acos(cosH)) / 15;
+    const T = H + RA - 0.06571 * t - 6.622;
+    const UT = (((T - lngHour) % 24) + 24) % 24;
+    // 현지 날짜 기준으로 UT 시각을 붙이고, 하루 차이가 나면 맞춤
+    let ms = Date.UTC(y, m, d) + UT * 3600000;
+    const local = new Date(ms);
+    if (local.getDate() !== d) ms += (local < day ? 1 : -1) * 86400000;
+    return new Date(ms);
+  };
+  const r = calc(true), s = calc(false);
+  if (typeof r === "string" || typeof s === "string") return { rise: null, set: null, polar: (typeof r === "string" ? r : s) as "day" | "night" };
+  return { rise: r, set: s };
+}
+
+/** 설정(sun|auto|dark|light)과 지금 시각으로 실제 테마. sun = 일출~일몰 라이트, auto = light_from~dark_from 라이트 */
+export function themeFor(cfg: ThemeCfg | undefined, now: Date): Theme {
+  const mode = cfg?.mode || "sun";
   if (mode === "dark" || mode === "light") return mode;
+  if (mode === "sun") {
+    const { lat, lon } = themeCoords(cfg);
+    const st = sunTimes(now, lat, lon);
+    if (st.polar) return st.polar === "day" ? "light" : "dark";
+    return now >= st.rise! && now < st.set! ? "light" : "dark";
+  }
   const mins = (s: string | undefined, d: number) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ""); return m ? +m[1] * 60 + +m[2] : d; };
   const a = mins(cfg?.light_from, 7 * 60), b = mins(cfg?.dark_from, 19 * 60), x = now.getHours() * 60 + now.getMinutes();
   return (a <= b ? x >= a && x < b : x >= a || x < b) ? "light" : "dark";

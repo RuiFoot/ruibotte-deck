@@ -2,7 +2,7 @@
 // 분류: 일반 · PC · AI 도구별(Claude Code / GPT / Gemini) · 알림 · 기록 · 정보
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { C, ago, api, usePoll } from "../lib";
+import { C, ago, api, hm, sunTimes, themeCoords, usePoll } from "../lib";
 import { Muted } from "./ui";
 import { Overlay } from "./SessionModal";
 
@@ -76,14 +76,31 @@ function ThemeGroup() {
   const { data } = usePoll<Record<string, unknown>>(`/api/settings?_=${tick}`, 600000);
   const { busy, msg, run } = useBusy();
   if (!data) return <Muted>불러오는 중…</Muted>;
-  const mode = String(data["display.theme"] ?? "auto") as "auto" | "light" | "dark";
-  const save = (patch: Record<string, string>) => run(async () => { await api("/api/settings", "PUT", patch); setTick((t) => t + 1); });
+  const mode = String(data["display.theme"] ?? "sun") as "sun" | "auto" | "light" | "dark";
+  const save = (patch: Record<string, unknown>) => run(async () => { await api("/api/settings", "PUT", patch); setTick((t) => t + 1); });
+  const pos = themeCoords({ lat: data["display.lat"] as number | null, lon: data["display.lon"] as number | null });
+  const today = sunTimes(new Date(), pos.lat, pos.lon);
+  const here = () => run(() => new Promise<void>((ok, fail) => {
+    if (!navigator.geolocation) return fail(new Error("이 브라우저는 위치를 알려주지 않아요"));
+    navigator.geolocation.getCurrentPosition(
+      async (p) => { await api("/api/settings", "PUT", { "display.lat": +p.coords.latitude.toFixed(2), "display.lon": +p.coords.longitude.toFixed(2) }); setTick((t) => t + 1); ok(); },
+      () => fail(new Error("위치를 가져오지 못했어요 (권한을 허용하거나 시간대 기준을 쓰세요)")), { timeout: 15000 });
+  }), "현재 위치로 맞췄어요.");
   return (
-    <Group title="테마" footer={<>자동이면 정한 시각에 라이트·다크가 바뀌어요. 아이패드 등 다른 화면에도 같이 적용돼요.<Msg m={msg && !msg.ok ? msg : null} /></>}>
+    <Group title="테마" footer={<>일출·일몰이면 해 뜰 때 라이트, 해 질 때 다크로 바뀌어요. 아이패드 등 다른 화면에도 같이 적용돼요.<Msg m={msg} /></>}>
       <Row label="모양">
         <Seg value={mode} disabled={busy} onChange={(v) => save({ "display.theme": v })}
-          options={[["auto", "자동"], ["light", "라이트"], ["dark", "다크"]]} />
+          options={[["sun", "일출·일몰"], ["auto", "시간 지정"], ["light", "라이트"], ["dark", "다크"]]} />
       </Row>
+      {mode === "sun" && <>
+        <Row label="오늘" sub={today.polar ? (today.polar === "day" ? "해가 지지 않는 날" : "해가 뜨지 않는 날") : undefined}>
+          {!today.polar && <span className="g-val">일출 {hm(today.rise!)} · 일몰 {hm(today.set!)}</span>}
+        </Row>
+        <Row label="위치" sub={pos.guessed ? "PC 시간대로 추정한 위치 (좌표는 이 PC에만 저장)" : `위도 ${pos.lat} · 경도 ${pos.lon}`}>
+          <button className="g-btn" disabled={busy} onClick={here}>현재 위치 사용</button>
+          {!pos.guessed && <button className="g-btn" disabled={busy} onClick={() => save({ "display.lat": null, "display.lon": null })}>시간대 기준</button>}
+        </Row>
+      </>}
       {mode === "auto" && <>
         <Row label="라이트 시작"><input className="g-in" type="time" defaultValue={String(data["display.light_from"] ?? "07:00")} disabled={busy}
           onBlur={(e) => e.target.value && save({ "display.light_from": e.target.value })} /></Row>
