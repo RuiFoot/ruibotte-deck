@@ -1,0 +1,26 @@
+# 개인 설정·실행 기록 (접속 토큰 포함 — 절대 올리지 않음)
+config.json
+server.log
+state_cache.json
+*.db
+*.db-wal
+*.db-shm
+
+# 작업 메모 (개인 환경 정보 포함)
+CLAUDE.md
+.claude/
+
+# 개인 환경 전용 스크립트
+set-ipad-display.ps1
+install-autostart.ps1
+
+# 빌드 결과
+__pycache__/
+*.pyc
+build/
+dist/
+build_pyi.log
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+build_all.log
