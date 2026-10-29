@@ -5,6 +5,8 @@ import type { AiProvider, MachineRow, RemoteState, State } from "./types";
 import { Icon, Muted } from "./components/ui";
 import { SegTabs } from "./components/SegTabs";
 import { AddToHomeHint, FullscreenChip } from "./components/MobileHint";
+import { AlertToasts } from "./components/AlertToasts";
+import { WakeLockChip } from "./components/WakeLock";
 import { MachineView, fromLocal, fromRemote, machineAlert } from "./components/MachineView";
 import type { Machine } from "./components/MachineView";
 import { AiPanel, aiTabs } from "./components/AiPanel";
@@ -81,6 +83,14 @@ export default function App() {
   const [showAlerts, setShowAlerts] = useState(false);
   // 새 버전 알림 (서버가 6시간마다 GitHub 확인, 여기서는 30분마다 결과만 읽음)
   const { data: upd } = usePoll<{ newer?: boolean; latest?: string | null }>("/api/update", 1800000);
+  // 서버가 새 버전으로 바뀌면(업데이트 후 재시작) 열려 있던 화면도 새로 고침 → 아이폰·아이패드도 옛 화면 파일을 계속 쓰지 않음
+  const firstVer = useRef<string | null>(null);
+  useEffect(() => {
+    const v = s?.version;
+    if (!v) return;
+    if (firstVer.current === null) firstVer.current = v;
+    else if (v !== firstVer.current) location.reload();
+  }, [s?.version]);
   const [alertSeen, setAlertSeen] = useState<number>(() => store.get("alert-seen", 0));
   const [wizardSeen, setWizardSeen] = useState(false);
   const showWizard = wizard || (s?.setup_done === false && !wizardSeen);
@@ -210,7 +220,7 @@ export default function App() {
               : themeMode === "light" ? "☀ 라이트" : "☾ 다크"}
           </button>
           <span className={`chip ${error || errs.length ? "bad" : s ? "ok" : ""}`} title={errs.map((k) => `${k}: ${(s?.errors[k] || "").split("\n").slice(-2).join(" ")}`).join("\n")}>
-            <span className="d" />{error ? "서버 연결 끊김" : errs.length ? `수집 오류 ${errs.length}건` : s ? "실시간" : "연결 중"}
+            <span className="d" />{error?.includes("토큰") ? "접속 권한 없음" : error ? "서버 연결 끊김" : errs.length ? `수집 오류 ${errs.length}건` : s ? "실시간" : "연결 중"}
           </span>
           {(() => {
             const al = s?.alerts || [];
@@ -225,12 +235,21 @@ export default function App() {
             <button className="chip upd" title="새 버전 — 설정 > 정보에서 업데이트" onClick={() => { try { localStorage.setItem("settings-page", "about"); } catch { /* 저장 불가 */ } setShowSettings(true); }}>
               ⬆ {upd.latest} 업데이트</button>
           )}
+          <WakeLockChip />
           <FullscreenChip />
           <button className="chip gear" title="설정" onClick={() => setShowSettings(true)}>{Icon.gear}</button>
         </div>
       </header>
 
       <AddToHomeHint />
+      {error?.includes("토큰") && (
+        <div className="a2hs bad">
+          <div><b>이 기기는 접속 권한이 없어요</b>
+            <span>PC에서 <b>설정 › 일반 › 다른 기기에서 보기</b>의 QR을 다시 찍어 열어 주세요. 홈 화면 앱이라면, QR로 연 사파리 화면에서
+              다시 <b>공유 › 홈 화면에 추가</b>를 하면 권한이 함께 저장돼요.</span></div>
+        </div>
+      )}
+      <AlertToasts alerts={s?.alerts} />
       <main>
         <section className="panel p-sys">
           <div className="phead">

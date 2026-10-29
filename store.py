@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS machines(
 CREATE TABLE IF NOT EXISTS profiles(                                      -- AI 도구 계정(로그인 폴더). path ''= 기본 폴더
     id TEXT PRIMARY KEY, machine_id TEXT NOT NULL, provider TEXT NOT NULL, path TEXT DEFAULT '', label TEXT,
     enabled INTEGER DEFAULT 1, created_at INTEGER);
+CREATE TABLE IF NOT EXISTS push_subs(                                     -- 휴대폰 알림(Web Push) 구독
+    endpoint TEXT PRIMARY KEY, keys_json TEXT, device TEXT, created_at INTEGER, last_ok INTEGER);
 CREATE TABLE IF NOT EXISTS providers(id TEXT PRIMARY KEY, enabled INTEGER DEFAULT 1, options_json TEXT DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS sys_minute(
     machine_id TEXT, ts INTEGER, cpu REAL, mem REAL, swap REAL, net_down REAL, net_up REAL, gpu REAL,
@@ -277,6 +279,21 @@ class Store:
         fields = {k: (int(bool(v)) if k == "enabled" else v) for k, v in fields.items() if k in ("label", "enabled")}
         if fields:
             self._exec(f"UPDATE profiles SET {', '.join(f'{k}=?' for k in fields)} WHERE id=?", (*fields.values(), pid))
+
+    # ---------- 휴대폰 알림 구독 ----------
+    def push_subs(self):
+        return self._all("SELECT * FROM push_subs ORDER BY created_at")
+
+    def push_add(self, endpoint, keys, device):
+        self._exec("INSERT INTO push_subs(endpoint, keys_json, device, created_at) VALUES(?, ?, ?, ?) "
+                   "ON CONFLICT(endpoint) DO UPDATE SET keys_json=excluded.keys_json, device=excluded.device",
+                   (endpoint, json.dumps(keys), device, int(time.time())))
+
+    def push_ok(self, endpoint):
+        self._exec("UPDATE push_subs SET last_ok=? WHERE endpoint=?", (int(time.time()), endpoint))
+
+    def push_remove(self, endpoint):
+        self._exec("DELETE FROM push_subs WHERE endpoint=?", (endpoint,))
 
     # ---------- 공급자(AI 도구) 켜기/끄기 ----------
     def provider_settings(self):

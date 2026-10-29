@@ -138,6 +138,7 @@ export interface State {
   machines?: MachineRow[];
   setup_done?: boolean;
   names?: Record<string, string>;   // PC·계정 폴더 키 -> 표시 이름
+  version?: string;   // 서버(앱) 버전 — 바뀌면 화면 새로 고침
   theme?: { mode: "sun" | "auto" | "dark" | "light"; light_from: string; dark_from: string; lat?: number | null; lon?: number | null };
   alerts?: { t: number; kind: string; title: string; message: string }[];
   systems?: Record<string, RemoteState | null>;

@@ -772,3 +772,54 @@ body { background: transparent !important; }
   header { padding-top: max(1em, env(safe-area-inset-top)); }
   main { padding-bottom: calc(1.4em + env(safe-area-inset-bottom)); }
 }
+
+/* 화면 안 알림 배너 (유리) */
+.toasts { position: fixed; top: max(.8em, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 80;
+  display: flex; flex-direction: column; gap: .5em; width: min(30em, calc(100vw - 1.6em)); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; gap: .75em; align-items: flex-start; padding: .8em 1em; border-radius: 20px; cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi), 0 12px 40px rgba(0,0,0,.3);
+  backdrop-filter: blur(30px) saturate(190%); -webkit-backdrop-filter: blur(30px) saturate(190%); animation: toastin .35s cubic-bezier(.2,.9,.3,1.2); }
+.toast .dot { width: .6em; height: .6em; border-radius: 50%; background: var(--ios-blue); margin-top: .35em; flex: none; }
+.toast.k-waiting .dot, .toast.k-limits .dot { background: var(--amber); }
+.toast.k-machine .dot, .toast.k-disk .dot, .toast.k-cpu .dot, .toast.k-context .dot { background: var(--red); }
+.toast.k-session_done .dot, .toast.k-limit_reset .dot { background: var(--green); }
+.toast > div { display: flex; flex-direction: column; gap: .15em; min-width: 0; }
+.toast b { font-size: .92em; }
+.toast span { font-size: .8em; color: var(--dim); }
+@keyframes toastin { from { opacity: 0; transform: translateY(-.8em) scale(.97); } to { opacity: 1; transform: none; } }
+/* 화면 켜 두기 안내 (http 일 때) */
+.wl-hint { position: fixed; top: calc(max(.8em, env(safe-area-inset-top)) + 3.2em); right: 1em; left: 1em; z-index: 70; max-width: 28em; margin-left: auto;
+  padding: .8em 1em; border-radius: 16px; font-size: .82em; line-height: 1.5; color: var(--dim);
+  background: var(--glass); border: 1px solid var(--glass-edge); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+.wl-hint b { color: var(--text); }
+
+.a2hs.bad { border-color: rgba(255,107,107,.45); }
+.a2hs.bad > div > b { color: var(--red); }
+/* 홈 화면 앱(주소창 없음): 상태 표시줄 아래로 조금 더 띄움 */
+@media (display-mode: standalone) {
+  header { padding-top: calc(env(safe-area-inset-top) + .6em) !important; }
+}
+
+/* ===== 설정 · 휴대폰: iOS 설정 방식 (목록 → 페이지 → ‹ 설정) ===== */
+.st-back { font: inherit; font-size: 1em; font-weight: 500; color: var(--ios-blue); background: none; border: 0; padding: 0; cursor: pointer; }
+@media (max-width: 760px) {
+  .st-win.m-list, .st-win.m-page { flex-direction: column; }
+  .st-win.m-list .st-main { display: none; }
+  .st-win.m-page .st-side { display: none; }
+  .st-win.m-list .st-side { display: block; width: auto; flex: 1; overflow-y: auto; border: 0; padding: .6em 1em 2em; background: transparent; }
+  .st-win.m-list .st-side .sec { display: block; text-transform: uppercase; font-size: .74em; margin: 1.3em 1.1em .45em; }
+  /* 분류를 iOS 묶음 목록처럼: 흰(유리) 줄 + 왼쪽 아이콘 + 오른쪽 › */
+  .st-win.m-list .st-side > div > button { width: 100%; border-radius: 0; padding: .72em 1em; margin: 0; font-size: 1em;
+    background: var(--glass-cell); border-left: 1px solid var(--glass-edge); border-right: 1px solid var(--glass-edge); color: var(--text); }
+  .st-win.m-list .st-side > div > button.on { background: var(--glass-cell); color: var(--text); box-shadow: none; }
+  .st-win.m-list .st-side > div:first-child > button, .st-win.m-list .st-side .sec + button { border-top: 1px solid var(--glass-edge); border-radius: 14px 14px 0 0; }
+  .st-win.m-list .st-side > div:has(+ div > .sec) > button, .st-win.m-list .st-side > div:last-child > button {
+    border-bottom: 1px solid var(--glass-edge); border-radius: 0 0 14px 14px; }
+  .st-win.m-list .st-side > div:first-child:has(+ div > .sec) > button, .st-win.m-list .st-side .sec + button:only-of-type { border-radius: 14px; }
+  .st-win.m-list .st-side .chev { color: var(--faint); font-size: 1.2em; margin-left: auto; }
+  .st-win.m-list .st-side .off-tag { margin-left: auto; }
+  .st-win.m-list .st-side .off-tag + .chev { margin-left: .4em; }
+  .st-win.m-page .st-main { padding: 1em 1em calc(2em + env(safe-area-inset-bottom)); }
+  .st-win.m-page .st-main h2 { font-size: 1.9em; margin: .1em .3em .7em; }
+}
+@media (max-width: 760px) { .st-win.m-list .st-side > div > button { border-bottom: 1px solid var(--glass-edge); } }

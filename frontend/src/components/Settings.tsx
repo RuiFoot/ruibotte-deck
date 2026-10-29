@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import QRCode from "qrcode";
+import { chime, unlockAudio } from "./AlertToasts";
+import { PhonePush } from "./PhonePush";
 import { C, ago, api, hm, sunTimes, themeCoords, usePoll } from "../lib";
 import { Muted } from "./ui";
 import { Overlay } from "./SessionModal";
@@ -34,7 +36,7 @@ function useBusy() {
 }
 
 // ---------- 공통 부품 (묶음 · 줄 · 스위치 · 선택 버튼) ----------
-function Group({ title, footer, children }: { title?: ReactNode; footer?: ReactNode; children: ReactNode }) {
+export function Group({ title, footer, children }: { title?: ReactNode; footer?: ReactNode; children: ReactNode }) {
   return (
     <div className="g">
       {title && <div className="g-h">{title}</div>}
@@ -44,7 +46,7 @@ function Group({ title, footer, children }: { title?: ReactNode; footer?: ReactN
   );
 }
 
-function Row({ label, sub, children, dot, className }: { label: ReactNode; sub?: ReactNode; children?: ReactNode; dot?: boolean | null; className?: string }) {
+export function Row({ label, sub, children, dot, className }: { label: ReactNode; sub?: ReactNode; children?: ReactNode; dot?: boolean | null; className?: string }) {
   return (
     <div className={`g-row ${className || ""}`}>
       {dot != null && <span className={`dot ${dot ? "on" : ""}`} />}
@@ -66,7 +68,7 @@ function Seg<T extends string>({ value, options, onChange, disabled }: { value: 
   );
 }
 
-const Msg = ({ m }: { m: { ok: boolean; text: string } | null }) =>
+export const Msg = ({ m }: { m: { ok: boolean; text: string } | null }) =>
   m ? <div className="g-msg" style={{ color: m.ok ? C.green : C.red }}>{m.text}</div> : null;
 
 // ---------- 일반: 테마 · 실행 · 화면 ----------
@@ -139,7 +141,8 @@ export function DisplayAndApp() {
   );
 }
 
-interface Share { lan: boolean; active: boolean; needs_restart: boolean; port: number; addresses: { name: string; ip: string; url: string }[] }
+interface Share { lan: boolean; active: boolean; needs_restart: boolean; port: number; https_port?: number;
+  addresses: { name: string; ip: string; url: string; https?: string; ca?: string }[] }
 
 /** 다른 기기(아이패드·휴대폰)에서 보기: 스위치 → 다시 시작 → QR (접속 토큰 포함 주소) */
 function ShareGroup() {
@@ -147,7 +150,9 @@ function ShareGroup() {
   const { data: S, error } = usePoll<Share>(`/api/app/share?_=${tick}`, 15000);
   const { busy, msg, run } = useBusy();
   const [qr, setQr] = useState<string | null>(null);
-  const url = S?.addresses[0]?.url;
+  const [mode, setMode] = useState<"http" | "https">("http");
+  const a0 = S?.addresses[0];
+  const url = mode === "https" ? a0?.https : a0?.url;
   useEffect(() => {
     if (!url || !S?.active) { setQr(null); return; }
     QRCode.toDataURL(url, { margin: 1, width: 360, color: { dark: "#111318", light: "#ffffff" } }).then(setQr).catch(() => setQr(null));
@@ -163,6 +168,11 @@ function ShareGroup() {
       {S.needs_restart && (
         <Row label="다시 시작하면 적용돼요" sub="앱이 잠깐 꺼졌다가 바로 다시 켜져요">
           <button className="g-btn primary" disabled={busy} onClick={() => run(() => api("/api/app/restart", "POST"), "다시 시작하는 중… 잠시 뒤 창이 다시 열려요.")}>지금 다시 시작</button>
+        </Row>
+      )}
+      {S.active && S.addresses.length > 0 && a0?.https && (
+        <Row label="주소" sub={mode === "https" ? "보안 연결 — 휴대폰 알림·화면 켜 두기가 돼요. 처음 한 번 휴대폰에 인증서 설치가 필요해요 (그 휴대폰의 설정 › 알림 안내)" : "바로 보기 — 설치 없이 열려요"}>
+          <Seg value={mode} onChange={setMode} options={[["http", "바로 보기"], ["https", "보안 연결"]]} />
         </Row>
       )}
       {S.active && (S.addresses.length ? (
@@ -405,8 +415,10 @@ function NotifyPage() {
           </Row>
         ))}
       </Group>
+      <DeviceSound />
+      <PhonePush />
       <Group footer={<Msg m={msg} />}>
-        <Row label="알림 시험" sub="지금 시험 알림을 하나 보내요">
+        <Row label="알림 시험" sub="지금 시험 알림을 하나 보내요 (PC 알림 + 열려 있는 화면의 배너)">
           <button className="g-btn" disabled={busy} onClick={() => run(async () => {
             const r = await api<{ tray: boolean }>("/api/notify/test", "POST");
             if (!r.tray) throw new Error("트레이 앱이 아니라 알림을 띄울 수 없어요 (로그에만 남음)");
@@ -414,6 +426,21 @@ function NotifyPage() {
         </Row>
       </Group>
     </>
+  );
+}
+
+/** 이 기기(브라우저)에서 화면 안 알림이 올 때 소리 — 아이폰·아이패드는 기기마다 켜야 함 */
+function DeviceSound() {
+  const [on, setOn] = useState(() => { try { return localStorage.getItem("alert-sound") === "1"; } catch { return false; } });
+  const set = (v: boolean) => {
+    setOn(v);
+    try { localStorage.setItem("alert-sound", v ? "1" : "0"); } catch { /* 저장 불가 */ }
+    if (v) { unlockAudio(); chime(); }   // 누른 순간 소리를 깨우고 한 번 들려 줌 (아이폰은 이렇게 해야 소리가 남)
+  };
+  return (
+    <Group title="이 기기" footer="대시보드를 열어 둔 화면 위쪽에 알림 배너가 떠요. 소리는 기기마다 따로 켜요.">
+      <Row label="알림 소리" sub="짧은 알림음"><Switch on={on} onChange={set} /></Row>
+    </Group>
   );
 }
 
@@ -571,11 +598,22 @@ export function Settings({ onClose, onWizard }: { onClose: () => void; onWizard?
     try { return (localStorage.getItem("settings-page") as Page) || "general"; } catch { return "general"; }
   });
   const { data: provs } = usePoll<Record<string, { enabled: boolean }>>("/api/providers/settings", 10000);
-  const go = (p: Page) => { setPage(p); try { localStorage.setItem("settings-page", p); } catch { /* 저장 불가 */ } };
+  // 휴대폰(좁은 화면): iOS 설정처럼 [분류 목록] → 누르면 [그 페이지] → '‹ 설정'으로 돌아감
+  const narrow = () => window.matchMedia("(max-width: 760px)").matches;
+  const [isNarrow, setNarrow] = useState(narrow);
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width: 760px)"), f = () => setNarrow(m.matches);
+    m.addEventListener("change", f);
+    return () => m.removeEventListener("change", f);
+  }, []);
+  const go = (p: Page) => { setPage(p); setOpened(true); try { localStorage.setItem("settings-page", p); } catch { /* 저장 불가 */ } };
   const cur = NAV.find((n) => n.id === page) || NAV[0];
+  const mode = !isNarrow ? "" : opened ? "m-page" : "m-list";
   return (
-    <Overlay wide title="설정" onClose={onClose} className="settings-sheet">
-      <div className="st-win">
+    <Overlay wide title={mode === "m-page" ? <button className="st-back" onClick={() => setOpened(false)}>‹ 설정</button> : "설정"}
+      onClose={onClose} className="settings-sheet">
+      <div className={`st-win ${mode}`}>
         <nav className="st-side">
           {NAV.map((n) => (
             <div key={n.id}>
@@ -584,6 +622,7 @@ export function Settings({ onClose, onWizard }: { onClose: () => void; onWizard?
                 <span className="st-ic" style={{ backgroundColor: n.color }}>{NAV_ICON[n.icon]}</span>
                 <span className="lbl">{n.label}</span>
                 {n.id.startsWith("ai:") && provs && !provs[n.id.slice(3)]?.enabled && <span className="off-tag">꺼짐</span>}
+                {isNarrow && <span className="chev">›</span>}
               </button>
             </div>
           ))}

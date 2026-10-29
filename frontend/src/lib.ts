@@ -132,6 +132,8 @@ const TOKEN = (() => {
     return t || localStorage.getItem("rbd-token");
   } catch { return t; }
 })();
+/** 다른 기기 접속 토큰 (보안 주소 링크를 만들 때) */
+export const authToken = () => TOKEN;
 export const apiUrl = (path: string) =>
   path + (TOKEN ? (path.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN) : "");
 
@@ -174,6 +176,7 @@ export function useDashboardState(intervalMs = 2000) {
     const tick = async () => {
       try {
         const r = await fetch(url, { cache: "no-store" });
+        if (r.status === 403) throw new Error("토큰 없음");   // 다른 기기인데 접속 토큰이 없거나 틀림
         if (!r.ok) throw new Error(String(r.status));
         const s = (await r.json()) as State;
         if (alive) { setState(s); setError(null); }

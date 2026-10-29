@@ -24,3 +24,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
 build_all.log
+
+# 인증서·푸시 키 (개발 실행 시 프로젝트 폴더에 생김 — 절대 올리지 않음)
+tls/
+push/

@@ -55,6 +55,9 @@ def run_server():
     """이전 실행이 아직 끝나는 중이라 포트가 안 비었으면 최대 60초 동안 다시 시도."""
     import uvicorn
     import app as dashboard
+    hc = dashboard.https_server_config()   # 다른 기기 접속이 켜져 있으면 HTTPS(포트+1)도 — 휴대폰 알림·화면 켜 두기용
+    if hc:
+        threading.Thread(target=uvicorn.Server(hc).run, daemon=True, name="https").start()
     for _ in range(30):
         try:
             uvicorn.Server(uvicorn.Config(dashboard.app, host=CFG["bind"], port=PORT, log_level="warning")).run()

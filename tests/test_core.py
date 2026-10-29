@@ -300,6 +300,26 @@ class AlertsTest(unittest.TestCase):
         self.assertEqual(self.sent, [])
 
 
+class SecureTest(unittest.TestCase):
+    def test_local_ca_and_server_cert(self):
+        import ssl
+        import secure
+        with tempfile.TemporaryDirectory() as d:
+            old = secure.TLS
+            secure.TLS = Path(d)
+            try:
+                crt, key = secure.ensure_certs()
+                ctx = ssl.create_default_context(cafile=str(Path(d) / "ca.crt"))   # CA만 믿는 클라이언트
+                ctx.load_verify_locations(cafile=str(Path(d) / "ca.crt"))
+                srv = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                srv.load_cert_chain(str(crt), str(key))                              # 서버 인증서·키가 짝이 맞음
+                info = secure.cert_info()
+                self.assertTrue(info["ready"] and "127.0.0.1" in info["names"] and "localhost" in info["names"])
+                self.assertEqual(secure.ensure_certs(), (crt, key))                  # 그대로면 다시 만들지 않음
+            finally:
+                secure.TLS = old
+
+
 class UpdaterTest(unittest.TestCase):
     def test_version_compare(self):
         from updater import ver_tuple

@@ -42,6 +42,7 @@ from store import DEFAULTS, Store  # noqa: E402
 from pricing import PRICES_AS_OF, cost_usd  # noqa: E402
 from alerts import KINDS as ALERT_KINDS, Alerts  # noqa: E402
 from updater import UPDATER  # noqa: E402
+import secure  # noqa: E402
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")   # 앱 정보 파일 (설치형 웹앱)
 
@@ -586,7 +587,16 @@ def start_collectors():
     threading.Thread(target=UPDATER.background, args=(lambda t, m: desktop.notify(t, m),), daemon=True, name="update-check").start()
 
 
-ALERTS = Alerts(send=lambda title, msg: desktop.notify(title, msg),
+PUSHER = secure.Pusher(STORE) if STORE else None   # 휴대폰 알림 (Web Push)
+
+
+def _send_alert(title, msg):
+    desktop.notify(title, msg)          # 이 PC: Windows 알림
+    if PUSHER:
+        PUSHER.send_all(title, msg)     # 알림을 켠 아이폰·아이패드 등
+
+
+ALERTS = Alerts(send=_send_alert,
                 enabled=lambda kind: bool(setting(f"notify.{kind}", True)))
 
 
@@ -639,7 +649,16 @@ async def token_guard(request: Request, call_next):
     needs_token = path.startswith("/api/") and path != "/api/health"
     if needs_token and host not in ("127.0.0.1", "::1") and request.query_params.get("t") != CFG.get("token"):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
-    return await call_next(request)
+    resp = await call_next(request)
+    # 캐시: 새 버전이면 아이폰·아이패드 사파리도 바로 새 화면을 받도록
+    #   이름에 내용 해시가 붙은 파일(/assets/…)은 오래 보관, 페이지·서비스워커·앱 정보·API는 매번 확인
+    if path.startswith("/assets/"):
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif not path.startswith("/api/") or path == "/api/health":
+        resp.headers["Cache-Control"] = "no-cache"
+    else:
+        resp.headers.setdefault("Cache-Control", "no-store")
+    return resp
 
 
 @app.get("/api/health")
@@ -674,7 +693,7 @@ def _v2_state():
                    "limits": provider_limits(pid, states),
                    "accounts": {k: labels.get(k, "기본") for k in slim}}   # 키 -> 계정 이름 (같은 이름 = 같은 계정)
     return {"machines": machines, "systems": systems, "ai": ai, "alerts": list(ALERTS.log)[:15],
-            "names": _machine_names(),
+            "names": _machine_names(), "version": desktop.APP_VERSION,
             "setup_done": bool(STORE.get("setup.done")) if STORE else True,
             "theme": {"mode": setting("display.theme", "sun"), "light_from": setting("display.light_from", "07:00"),
                       "dark_from": setting("display.dark_from", "19:00"),
@@ -1118,8 +1137,86 @@ def app_share(request: Request):
     want = cfg.get("bind") not in ("127.0.0.1", "localhost", "::1")
     running = CFG.get("bind") not in ("127.0.0.1", "localhost", "::1")
     addrs = desktop.lan_addresses()
-    return {"lan": want, "active": running, "needs_restart": want != running, "port": CFG["port"],
-            "addresses": [{**a, "url": f"http://{a['ip']}:{CFG['port']}/?t={cfg.get('token', '')}"} for a in addrs]}
+    hp = secure.https_port(CFG["port"])
+    return {"lan": want, "active": running, "needs_restart": want != running, "port": CFG["port"], "https_port": hp,
+            "addresses": [{**a, "url": f"http://{a['ip']}:{CFG['port']}/?t={cfg.get('token', '')}",
+                           "https": f"https://{a['ip']}:{hp}/?t={cfg.get('token', '')}",
+                           "ca": f"http://{a['ip']}:{CFG['port']}/ca.crt"} for a in addrs],
+            "cert": secure.cert_info()}
+
+
+# ---------- HTTPS · 휴대폰 알림 (secure.py) ----------
+def lan_on():
+    return CFG.get("bind") not in ("127.0.0.1", "localhost", "::1")
+
+
+def https_server_config():
+    """다른 기기 접속이 켜져 있으면 HTTPS 서버 설정 (포트+1, 로컬 CA가 발급한 인증서). 트레이가 따로 띄움."""
+    if not lan_on():
+        return None
+    try:
+        crt, key = secure.ensure_certs()
+    except Exception:
+        ERRORS["https"] = traceback.format_exc(limit=2)
+        return None
+    return uvicorn.Config(app, host=CFG["bind"], port=secure.https_port(CFG["port"]), ssl_certfile=str(crt),
+                          ssl_keyfile=str(key), log_level="warning", lifespan="off")
+
+
+@app.get("/ca.crt")
+def ca_certificate():
+    """휴대폰에 설치할 로컬 CA 인증서 (공개 정보, 토큰 불필요). 아이폰은 받으면 '프로파일 다운로드됨'."""
+    from fastapi import Response
+    return Response(secure.ca_cert_bytes(), media_type="application/x-x509-ca-cert",
+                    headers={"Content-Disposition": 'attachment; filename="RuiBotteDeck-CA.crt"', "Cache-Control": "no-cache"})
+
+
+@app.get("/api/push/info")
+def push_info(request: Request):
+    _, pub = secure.vapid()
+    return {"public_key": pub, "https_port": secure.https_port(CFG["port"]), "lan": lan_on(),
+            "secure": request.url.scheme == "https", "devices": len(STORE.push_subs()) if STORE else 0, **secure.cert_info()}
+
+
+@app.post("/api/push/subscribe")
+def push_subscribe(body: dict = Body(...)):
+    """이 기기 알림 켜기: 브라우저가 만든 구독(endpoint·keys)을 저장."""
+    _need_store()
+    sub = body.get("subscription") or {}
+    ep, keys = sub.get("endpoint"), sub.get("keys") or {}
+    if not (isinstance(ep, str) and ep.startswith("https://") and keys.get("p256dh") and keys.get("auth")):
+        raise HTTPException(400, "구독 정보가 올바르지 않아요")
+    STORE.push_add(ep, {"p256dh": keys["p256dh"], "auth": keys["auth"]}, str(body.get("device") or "")[:80])
+    return {"ok": True}
+
+
+@app.post("/api/push/unsubscribe")
+def push_unsubscribe(body: dict = Body(...)):
+    _need_store()
+    STORE.push_remove(str(body.get("endpoint") or ""))
+    return {"ok": True}
+
+
+@app.get("/api/push/devices")
+def push_devices():
+    _need_store()
+    return {"devices": [{"id": i, "device": s["device"] or "기기", "created_at": s["created_at"], "last_ok": s["last_ok"],
+                         "service": s["endpoint"].split("/")[2]} for i, s in enumerate(STORE.push_subs())]}
+
+
+@app.delete("/api/push/devices/{idx}")
+def push_device_remove(idx: int):
+    _need_store()
+    subs = STORE.push_subs()
+    if 0 <= idx < len(subs):
+        STORE.push_remove(subs[idx]["endpoint"])
+    return {"ok": True}
+
+
+@app.post("/api/push/test")
+def push_test():
+    n = PUSHER.send_all(f"{desktop.APP_NAME} 알림 시험", "이 알림이 보이면 휴대폰 알림이 정상이에요.", "test") if PUSHER else 0
+    return {"ok": True, "devices": n}
 
 
 @app.get("/api/logs")
@@ -1774,10 +1871,28 @@ def machine_net(mid: str, range: str = "24h"):   # noqa: A002
                   "outages": [{"start": a, "end": b + 60} for a, b in downs[-10:][::-1]]})
 
 
+@app.get("/manifest.webmanifest")
+def web_manifest(t: str = None):
+    """앱 정보(홈 화면 앱). 아이폰 홈 화면 앱은 사파리와 저장소가 따로라 주소의 토큰을 기억하지 못함
+    → 올바른 토큰으로 요청하면 시작 주소에 토큰을 넣어 줌 (홈 화면 아이콘으로 열어도 바로 접속)."""
+    from fastapi import Response
+    try:
+        m = json.loads((DIST / "manifest.webmanifest").read_text(encoding="utf-8"))
+    except OSError:
+        raise HTTPException(404)
+    if t and t == CFG.get("token"):
+        m["start_url"] = f"/?t={t}"
+        m["id"] = "/"
+    return Response(json.dumps(m, ensure_ascii=False), media_type="application/manifest+json", headers={"Cache-Control": "no-cache"})
+
+
 if DIST.exists():
     app.mount("/", StaticFiles(directory=DIST, html=True), name="ui")
 
 
 if __name__ == "__main__":
     print(f"dashboard: http://localhost:{CFG['port']}")
+    hc = https_server_config()
+    if hc:
+        threading.Thread(target=uvicorn.Server(hc).run, daemon=True, name="https").start()
     uvicorn.run(app, host=CFG["bind"], port=CFG["port"], log_level="warning")
