@@ -9,10 +9,10 @@ import { SessionList } from "./SessionList";
 import type { ListSession } from "./SessionList";
 
 /** modal: 바깥을 눌러도 닫지 않음 (첫 실행 마법사처럼 실수로 닫히면 안 되는 창) */
-export function Overlay({ title, onClose, children, wide, modal }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; modal?: boolean }) {
+export function Overlay({ title, onClose, children, wide, modal, className }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; modal?: boolean; className?: string }) {
   return (
     <div className="overlay" onClick={modal ? undefined : onClose}>
-      <div className={`sheet ${wide ? "wide" : ""}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`sheet ${wide ? "wide" : ""} ${className || ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head"><div className="t">{title}</div><button className="x" onClick={onClose}>✕</button></div>
         <div className="sheet-body">{children}</div>
       </div>

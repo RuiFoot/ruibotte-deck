@@ -1080,7 +1080,9 @@ def get_displays():
 @app.get("/api/app")
 def get_app_info():
     return {"platform": sys.platform, "autostart": desktop.autostart_on(), "port": CFG["port"],
-            "lan": CFG.get("bind") not in ("127.0.0.1", "localhost", "::1")}
+            "lan": CFG.get("bind") not in ("127.0.0.1", "localhost", "::1"),
+            "name": desktop.APP_NAME, "version": desktop.APP_VERSION, "repo": desktop.REPO_URL,
+            "installed": desktop.FROZEN, "data_dir": str(desktop.DATA)}
 
 
 @app.put("/api/app")

@@ -18,6 +18,8 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 IS_WIN, IS_MAC = sys.platform == "win32", sys.platform == "darwin"
 ICON = ROOT / "assets" / "icon.ico"
 APP_NAME = "RuiBotte Deck"
+APP_VERSION = "2.0.2"
+REPO_URL = "https://github.com/RuiFoot/ruibotte-deck"
 LEGACY_NAMES = ("PC Dashboard", "DeskPulse")            # 예전 바로가기 이름 (자동 실행 확인·정리용)
 
 
