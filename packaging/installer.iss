@@ -1,7 +1,7 @@
 ; Inno Setup: RuiBotte Deck 설치 프로그램 (사용자별 설치 — 관리자 권한 불필요, '설정 > 앱'에서 제거 가능)
 ; 빌드: packaging/build.ps1 (먼저 PyInstaller로 dist\RuiBotteDeck 를 만든 뒤 ISCC로 이 파일을 컴파일)
 #define AppName "RuiBotte Deck"
-#define AppVersion "2.0.3"
+#define AppVersion "2.0.4"
 #define AppExe "RuiBotteDeck.exe"
 
 [Setup]

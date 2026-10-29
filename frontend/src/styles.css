@@ -638,3 +638,7 @@ select.g-in { text-align: left; max-width: 22em; cursor: pointer; }
 .settings-sheet .sw.on { background: linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,0) 60%), var(--ios-green); }
 .settings-sheet .sw::after { background: linear-gradient(180deg, #fff, #f1f1f4); box-shadow: 0 2px 6px rgba(0,0,0,.28), inset 0 -1px 1px rgba(0,0,0,.06); }
 .settings-sheet .g-val { font-size: .88em; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+/* 설정 분류 아이콘: SVG를 칸 가운데 같은 크기로 */
+.st-ic { display: inline-flex; align-items: center; justify-content: center; line-height: 0; font-size: 1em; }
+.st-ic svg { width: 64%; height: 64%; color: #fff; display: block; }

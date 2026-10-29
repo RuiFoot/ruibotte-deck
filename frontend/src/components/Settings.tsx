@@ -447,15 +447,30 @@ function AboutPage() {
 
 // ---------- 창 ----------
 type Page = "general" | "pc" | "ai:claude" | "ai:codex" | "ai:gemini" | "notify" | "history" | "about";
+// 분류 아이콘: 글꼴마다 크기·높이가 다른 이모지 대신 같은 24칸 SVG (흰 선 2px, 가운데 정렬)
+const svg = (d: ReactNode, fill = false) => (
+  <svg viewBox="0 0 24 24" fill={fill ? "currentColor" : "none"} stroke={fill ? "none" : "currentColor"} strokeWidth={2}
+    strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+);
+const NAV_ICON: Record<string, ReactNode> = {
+  general: svg(<><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" /></>),
+  pc: svg(<><rect x="3" y="4.5" width="18" height="12" rx="2" /><path d="M9 20h6M12 16.5V20" /></>),
+  claude: svg(<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4" />),
+  codex: svg(<><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.2" /></>),
+  gemini: svg(<path d="M12 2.5c.9 5 3.6 8.4 9.5 9.5-5.9 1.1-8.6 4.5-9.5 9.5-.9-5-3.6-8.4-9.5-9.5 5.9-1.1 8.6-4.5 9.5-9.5z" />, true),
+  notify: svg(<><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>),
+  history: svg(<><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M10 2.8h4" /></>),
+  about: svg(<><circle cx="12" cy="12" r="9" /><path d="M12 11v6" /><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none" /></>),
+};
 const NAV: { sec?: string; id: Page; label: string; icon: string; color: string }[] = [
-  { id: "general", label: "일반", icon: "⚙", color: "#8e8e93" },
-  { id: "pc", label: "PC", icon: "🖥", color: "#5e5ce6" },
-  { sec: "AI 도구", id: "ai:claude", label: "Claude Code", icon: "✳", color: "#a26bfa" },
-  { id: "ai:codex", label: "GPT (Codex)", icon: "◎", color: "#10a37f" },
-  { id: "ai:gemini", label: "Gemini", icon: "✦", color: "#4285f4" },
-  { sec: " ", id: "notify", label: "알림", icon: "🔔", color: "#ff453a" },
-  { id: "history", label: "기록 · 수집", icon: "⏱", color: "#ff9f0a" },
-  { id: "about", label: "정보", icon: "ⓘ", color: "#636366" },
+  { id: "general", label: "일반", icon: "general", color: "#8e8e93" },
+  { id: "pc", label: "PC", icon: "pc", color: "#5e5ce6" },
+  { sec: "AI 도구", id: "ai:claude", label: "Claude Code", icon: "claude", color: "#d97757" },
+  { id: "ai:codex", label: "GPT (Codex)", icon: "codex", color: "#10a37f" },
+  { id: "ai:gemini", label: "Gemini", icon: "gemini", color: "#4285f4" },
+  { sec: " ", id: "notify", label: "알림", icon: "notify", color: "#ff453a" },
+  { id: "history", label: "기록 · 수집", icon: "history", color: "#ff9f0a" },
+  { id: "about", label: "정보", icon: "about", color: "#636366" },
 ];
 
 export function Settings({ onClose, onWizard }: { onClose: () => void; onWizard?: () => void }) {
@@ -473,7 +488,7 @@ export function Settings({ onClose, onWizard }: { onClose: () => void; onWizard?
             <div key={n.id}>
               {n.sec && <div className="sec">{n.sec.trim()}</div>}
               <button className={page === n.id ? "on" : ""} onClick={() => go(n.id)}>
-                <span className="st-ic" style={{ background: n.color }}>{n.icon}</span>
+                <span className="st-ic" style={{ backgroundColor: n.color }}>{NAV_ICON[n.icon]}</span>
                 <span className="lbl">{n.label}</span>
                 {n.id.startsWith("ai:") && provs && !provs[n.id.slice(3)]?.enabled && <span className="off-tag">꺼짐</span>}
               </button>
