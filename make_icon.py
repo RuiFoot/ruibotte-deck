@@ -72,7 +72,17 @@ def tray_icon(color):
     return pulse_layer(S, color, 128, shape=PULSE_TRAY)
 
 
+def touch_icon(size):
+    """아이폰·아이패드 홈 화면용: 투명 없는 꽉 찬 정사각형 (모서리는 iOS가 직접 둥글림). 투명이면 iOS가 글자 아이콘으로 바꿈."""
+    tile = gradient_tile(S // 4).resize((S, S), Image.LANCZOS)
+    img = Image.alpha_composite(tile, pulse_layer(S, (255, 255, 255, 255), 64, glow=True))
+    return img.convert("RGB").resize((size, size), Image.LANCZOS)
+
+
 def main():
+    pub = ROOT / "frontend" / "public"
+    touch_icon(180).save(pub / "apple-touch-icon.png")             # iOS가 가장 먼저 찾는 이름
+    touch_icon(512).save(pub / "icon-maskable-512.png")             # 앱 정보(manifest)용 꽉 찬 아이콘
     big = app_icon()
     big.resize((512, 512), Image.LANCZOS).save(ROOT / "assets" / "icon.png")
     big.save(ROOT / "assets" / "icon.ico", sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])

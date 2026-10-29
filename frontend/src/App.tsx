@@ -8,6 +8,7 @@ import { AddToHomeHint, FullscreenChip } from "./components/MobileHint";
 import { AlertToasts } from "./components/AlertToasts";
 import { WakeLockChip } from "./components/WakeLock";
 import { SecureUpgrade } from "./components/SecureUpgrade";
+import { PairBox } from "./components/PairBox";
 import { MachineView, fromLocal, fromRemote, machineAlert } from "./components/MachineView";
 import type { Machine } from "./components/MachineView";
 import { AiPanel, aiTabs } from "./components/AiPanel";
@@ -247,8 +248,8 @@ export default function App() {
       {error?.includes("토큰") && (
         <div className="a2hs bad">
           <div><b>이 기기는 접속 권한이 없어요</b>
-            <span>PC에서 <b>설정 › 일반 › 다른 기기에서 보기</b>의 QR을 다시 찍어 열어 주세요. 홈 화면 앱이라면, QR로 연 사파리 화면에서
-              다시 <b>공유 › 홈 화면에 추가</b>를 하면 권한이 함께 저장돼요.</span></div>
+            <span>PC의 <b>설정 › 일반 › 다른 기기에서 보기</b>에 있는 <b>연결 코드</b>(6자리)를 넣거나, 그 QR을 다시 찍어 열어 주세요.</span>
+            <PairBox /></div>
         </div>
       )}
       <AlertToasts alerts={s?.alerts} />

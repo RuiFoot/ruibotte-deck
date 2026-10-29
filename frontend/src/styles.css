@@ -823,3 +823,26 @@ body { background: transparent !important; }
   .st-win.m-page .st-main h2 { font-size: 1.9em; margin: .1em .3em .7em; }
 }
 @media (max-width: 760px) { .st-win.m-list .st-side > div > button { border-bottom: 1px solid var(--glass-edge); } }
+
+/* 연결 코드 */
+.pair-code { font-size: 1.5em; font-weight: 750; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.pair { display: flex; align-items: center; gap: .5em; margin-top: .55em; flex-wrap: wrap; }
+.pair input { font: inherit; font-size: 1.25em; letter-spacing: .25em; width: 7.5em; padding: .35em .6em; border-radius: 12px;
+  border: 1px solid var(--glass-edge); background: rgba(var(--wash), .08); color: var(--text); text-align: center; }
+.pair button { font: inherit; font-weight: 600; padding: .5em 1.2em; border-radius: 99px; border: 0; color: #fff; background: var(--ios-blue); cursor: pointer; }
+.pair button:disabled { opacity: .45; }
+.pair em { font-style: normal; color: var(--red); font-size: .9em; width: 100%; }
+
+/* 휴대폰 설정 목록 (묶음 목록 부품 재사용) */
+.st-mlist { display: none; }
+@media (max-width: 760px) {
+  .st-win.m-list .st-side { display: none !important; }
+  .st-win.m-list .st-mlist { display: block; flex: 1; overflow-y: auto; padding: .4em 1em calc(2em + env(safe-area-inset-bottom)); }
+  .st-mlist .g { margin-bottom: 1.6em; }
+  .g-nav { width: 100%; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+  .g-nav .st-ic { width: 1.9em; height: 1.9em; }
+  .g-nav .lb .t { font-size: 1em; }
+  .g-nav .chev { color: var(--faint); font-size: 1.35em; line-height: 1; margin-left: .2em; }
+  .g-nav:active { background: rgba(var(--wash), .08); }
+  .settings-sheet .g-row.g-nav + .g-row.g-nav::before { left: 3.6em; }   /* iOS: 구분선이 아이콘 뒤에서 시작 */
+}

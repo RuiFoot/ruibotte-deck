@@ -165,6 +165,7 @@ function ShareGroup() {
       <Row label="같은 네트워크의 기기에서 접속" sub={S.active ? `켜짐 · 포트 ${S.port}` : "꺼짐 · 이 PC에서만"}>
         <Switch on={S.lan} disabled={busy} onChange={(v) => run(async () => { await api("/api/app", "PUT", { lan: v }); setTick((t) => t + 1); })} />
       </Row>
+      {S.active && <PairCodeRow />}
       {S.needs_restart && (
         <Row label="다시 시작하면 적용돼요" sub="앱이 잠깐 꺼졌다가 바로 다시 켜져요">
           <button className="g-btn primary" disabled={busy} onClick={() => run(() => api("/api/app/restart", "POST"), "다시 시작하는 중… 잠시 뒤 창이 다시 열려요.")}>지금 다시 시작</button>
@@ -182,6 +183,17 @@ function ShareGroup() {
             {S.addresses.length > 1 && <div className="s">다른 주소: {S.addresses.slice(1).map((a) => `${a.ip} (${a.name})`).join(", ")}</div>}</div></div>} />
       ) : <Row label="네트워크 주소를 찾지 못했어요" sub="Wi-Fi나 이더넷에 연결돼 있는지 확인하세요" />)}
     </Group>
+  );
+}
+
+/** 연결 코드 (PC 화면에서만 보임): 홈 화면 앱에 접속 권한이 없을 때 그 앱에 넣는 6자리, 10분마다 바뀜 */
+function PairCodeRow() {
+  const { data } = usePoll<{ code: string; expires_in: number }>("/api/pair/code", 10000);
+  if (!data) return null;
+  return (
+    <Row label="연결 코드" sub={`홈 화면 앱이 '접속 권한 없음'이면 이 숫자를 넣으세요 · ${Math.ceil(data.expires_in / 60)}분 뒤 바뀜`}>
+      <span className="pair-code num">{data.code.slice(0, 3)} {data.code.slice(3)}</span>
+    </Row>
   );
 }
 
@@ -615,6 +627,27 @@ export function Settings({ onClose, onWizard }: { onClose: () => void; onWizard?
     <Overlay wide title={mode === "m-page" ? <button className="st-back" onClick={() => setOpened(false)}>‹ 설정</button> : "설정"}
       onClose={onClose} className="settings-sheet">
       <div className={`st-win ${mode}`}>
+        {mode === "m-list" && (
+          // 휴대폰: iOS 설정과 같은 묶음 목록 (아이콘 · 이름 · ›)
+          <div className="st-mlist">
+            {NAV.reduce<{ title?: string; items: typeof NAV }[]>((gs, n) => {
+              if (n.sec || !gs.length) gs.push({ title: n.sec?.trim() || undefined, items: [] });
+              gs[gs.length - 1].items.push(n);
+              return gs;
+            }, []).map((g, i) => (
+              <Group key={i} title={g.title}>
+                {g.items.map((n) => (
+                  <button key={n.id} className="g-row g-nav" onClick={() => go(n.id)}>
+                    <span className="st-ic" style={{ backgroundColor: n.color }}>{NAV_ICON[n.icon]}</span>
+                    <span className="lb"><span className="t">{n.label}</span></span>
+                    {n.id.startsWith("ai:") && provs && !provs[n.id.slice(3)]?.enabled && <span className="g-val">꺼짐</span>}
+                    <span className="chev">›</span>
+                  </button>
+                ))}
+              </Group>
+            ))}
+          </div>
+        )}
         <nav className="st-side">
           {NAV.map((n) => (
             <div key={n.id}>

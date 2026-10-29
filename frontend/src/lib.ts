@@ -134,6 +134,11 @@ const TOKEN = (() => {
 })();
 /** 다른 기기 접속 토큰 (보안 주소 링크를 만들 때) */
 export const authToken = () => TOKEN;
+/** 연결 코드로 받은 토큰 저장 후 새로 고침 (홈 화면 앱처럼 주소에 토큰이 없을 때) */
+export function saveToken(t: string) {
+  try { localStorage.setItem("rbd-token", t); } catch { /* 저장 불가 */ }
+  location.replace(location.pathname);
+}
 export const apiUrl = (path: string) =>
   path + (TOKEN ? (path.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN) : "");
 

@@ -646,7 +646,7 @@ async def token_guard(request: Request, call_next):
     화면 파일(HTML/JS/CSS)과 상태 확인(/api/health)에는 데이터가 없으므로 토큰 없이 허용."""
     host = request.client.host if request.client else ""
     path = request.url.path
-    needs_token = path.startswith("/api/") and path != "/api/health"
+    needs_token = path.startswith("/api/") and path not in ("/api/health", "/api/pair")
     if needs_token and host not in ("127.0.0.1", "::1") and request.query_params.get("t") != CFG.get("token"):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
     resp = await call_next(request)
@@ -1871,6 +1871,64 @@ def machine_net(mid: str, range: str = "24h"):   # noqa: A002
                               "uptime": round(100 * tot["ok"] / tot["n"], 2) if tot["n"] else None,
                               "down_min": tot["down_min"] or 0},
                   "outages": [{"start": a, "end": b + 60} for a, b in downs[-10:][::-1]]})
+
+
+# ---------- 휴대폰 홈 화면 앱 접속 ----------
+def _index_html(t=None):
+    """화면 첫 페이지. 올바른 토큰으로 열면 앱 정보(manifest) 주소에 토큰을 미리 넣어 줌
+    → 아이폰 '홈 화면에 추가'가 읽는 시작 주소에 토큰이 들어감 (홈 화면 앱은 사파리와 저장소가 따로)."""
+    from fastapi.responses import HTMLResponse
+    html = (DIST / "index.html").read_text(encoding="utf-8")
+    if t and t == CFG.get("token"):
+        from urllib.parse import quote
+        html = html.replace('href="/manifest.webmanifest"', f'href="/manifest.webmanifest?t={quote(t)}"', 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/", include_in_schema=False)
+def index_page(t: str = None):
+    return _index_html(t)
+
+
+@app.get("/index.html", include_in_schema=False)
+def index_file(t: str = None):
+    return _index_html(t)
+
+
+# 연결 코드: 토큰을 가진 PC 화면에 6자리 숫자(10분마다 바뀜)를 보여 주고, 홈 화면 앱에서 그 코드를 넣으면 토큰을 받음.
+# 틀린 시도는 10분에 10번까지 (6자리라도 무차별 대입 불가).
+_PAIR_FAILS = []
+
+
+def pair_code(window=None):
+    import hashlib
+    import hmac
+    w = int(time.time() // 600) if window is None else window
+    d = hmac.new(str(CFG.get("token") or "").encode(), str(w).encode(), hashlib.sha256).digest()
+    return f"{int.from_bytes(d[:4], 'big') % 1_000_000:06d}"
+
+
+@app.get("/api/pair/code")
+def get_pair_code(request: Request):
+    """PC 화면(이 PC)에서만: 지금의 연결 코드와 남은 시간."""
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "이 PC에서만 볼 수 있어요")
+    return {"code": pair_code(), "expires_in": 600 - int(time.time()) % 600}
+
+
+@app.post("/api/pair")
+def pair(body: dict = Body(...)):
+    """홈 화면 앱 등 토큰이 없는 기기: 연결 코드로 토큰 받기 (토큰 검사 대상이 아닌 공개 주소)."""
+    now = time.time()
+    _PAIR_FAILS[:] = [x for x in _PAIR_FAILS if now - x < 600]
+    if len(_PAIR_FAILS) >= 10:
+        raise HTTPException(429, "시도가 너무 많아요. 10분 뒤 다시 해 주세요")
+    code = "".join(ch for ch in str(body.get("code") or "") if ch.isdigit())
+    w = int(now // 600)
+    if code and CFG.get("token") and code in (pair_code(w), pair_code(w - 1)):
+        return {"token": CFG["token"]}
+    _PAIR_FAILS.append(now)
+    raise HTTPException(400, "코드가 맞지 않아요")
 
 
 @app.get("/manifest.webmanifest")
