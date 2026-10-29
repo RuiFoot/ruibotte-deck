@@ -389,7 +389,7 @@ button.link:hover { text-decoration: underline; }
 /* ===== 가로로 넓은 화면(노트북 16:9 등) =====
    컴퓨터: [게이지 | 넓은 5분 그래프] / [CPU 프로세스 | 메모리 프로세스] / [디스크 | GPU | Docker]
    Claude: [오늘 토큰 | 입출력 | 7일] / [넓고 낮은 60분 그래프] / [세션 목록이 나머지] */
-@media (min-aspect-ratio: 3/2) {
+@media (min-aspect-ratio: 4/3) {
   html, body { font-size: clamp(11px, min(0.82vw, 1.42vh), 18px); }
   header { padding: .6em 1.4em .4em; }
   .clock .time { font-size: 1.9em; }
@@ -700,3 +700,75 @@ body::before { content: ""; position: fixed; inset: -10%; z-index: -1; pointer-e
 .sheet .card { background: var(--glass-cell); }
 html { background-color: var(--bg); }
 body { background: transparent !important; }
+
+/* ===== 휴대폰 (아이폰 세로 · 가로) ===== */
+@media (max-width: 640px), (max-height: 500px) and (max-width: 1000px) {
+  html, body { font-size: 13.5px; overflow: auto; height: auto; min-height: 100dvh; }
+  .app { height: auto; min-height: 100dvh; }
+  /* 위쪽: [시계 날짜] / [컴퓨터 | AI 사용량] / [칩들 → 옆으로 밀기] */
+  header { flex-wrap: wrap; gap: .6em; padding: max(.8em, env(safe-area-inset-top)) max(1em, env(safe-area-inset-right)) .5em max(1em, env(safe-area-inset-left)); }
+  .clock { flex: 1 1 auto; min-width: 0; gap: .6em; }
+  .clock .time { font-size: 2em; }
+  .clock .date { white-space: nowrap; font-size: .85em; }
+  .areas { display: flex; order: 3; width: 100%; }
+  .areas button { flex: 1; justify-content: center; white-space: nowrap; }
+  header .right { order: 2; width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; padding-bottom: .1em; }
+  header .right::-webkit-scrollbar { display: none; }
+  header .right .chip { flex: none; }
+  main { display: block; padding: 0 max(.8em, env(safe-area-inset-right)) calc(1.2em + env(safe-area-inset-bottom)) max(.8em, env(safe-area-inset-left)); }
+  .area-sys .p-ai, .area-ai .p-sys { display: none; }
+  .panel { gap: .8em; }
+  .phead { flex-wrap: wrap; gap: .5em; }
+  .phead .seg { width: 100%; margin-left: 0; overflow-x: auto; scrollbar-width: none; }
+  .phead .seg button { flex: 1 0 auto; }
+  /* 넘김 화면: 지금 화면만 보여 줌 (겹친 절대 위치 대신 일반 흐름) */
+  .views { min-height: 0; flex: none; }
+  .view { position: static; opacity: 1; transform: none; }
+  .view:not(.on) { display: none; }
+  .mbody { display: flex; flex-direction: column; }
+  .card { padding: .85em .95em; border-radius: 18px; }
+  .m-hero .hero { grid-template-columns: 1fr 1fr; gap: .4em; }
+  .m-hero .heatwrap { height: auto; }
+  .m-hero .heat { grid-auto-rows: .62em; flex: none; }
+  .m-hist .chart-fill { height: 9em !important; }
+  .m-detail .m-detail-body { height: auto; max-height: 16em; }
+  .m-detail .cols2 { grid-template-columns: 1fr; }
+  /* AI: 한도 두 개는 위아래로, 오늘·7일도 위아래로 */
+  .plan { grid-template-columns: 1fr !important; gap: 1.1em; }
+  .usage-card .uc-top { grid-template-columns: 1fr; gap: .9em; }
+  .subhead { flex-wrap: wrap; gap: .5em; }
+  .subhead .seg { width: 100%; }
+  .subhead .note { width: 100%; }
+  .acct-chips { overflow-x: auto; flex-wrap: nowrap; }
+  .ins-row { grid-template-columns: 1.2em minmax(0, 1fr) 4.6em; }
+  .ins-row .bar { display: none; }
+  .cost .ins-row { grid-template-columns: minmax(0, 1fr) 4.6em; }
+  .insights .ins-body { height: auto; max-height: 18em; overflow: auto; }
+  .sess .ctx { width: 4.6em; }
+  /* 팝업은 화면 전체 (홈 바 영역 피함) */
+  .overlay { padding: 0; align-items: stretch; }
+  .sheet, .sheet.wide, .sheet.settings-sheet { width: 100%; height: 100%; max-height: none; border-radius: 0;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  /* 유리 흐림은 조금 가볍게 (휴대폰 성능) */
+  .card { backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); }
+  .chip, .seg { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+/* 손가락: 눌림 표시만, 마우스 올림 효과 없음 */
+@media (hover: none) {
+  button, .chip, .seg button { -webkit-tap-highlight-color: transparent; }
+}
+
+/* 아이폰 '홈 화면에 추가' 안내 */
+.a2hs { display: flex; align-items: flex-start; gap: .8em; margin: 0 max(.8em, env(safe-area-inset-right)) .8em max(.8em, env(safe-area-inset-left));
+  padding: .8em 1em; border-radius: 18px; background: var(--gl-card); border: 1px solid var(--gl-edge); box-shadow: inset 0 1px 0 var(--gl-hi);
+  backdrop-filter: blur(18px) saturate(170%); -webkit-backdrop-filter: blur(18px) saturate(170%); font-size: .85em; }
+.a2hs > div { flex: 1; display: flex; flex-direction: column; gap: .25em; }
+.a2hs span { color: var(--dim); line-height: 1.5; }
+.a2hs .ios-share { display: inline-grid; place-items: center; width: 1.4em; height: 1.4em; border-radius: 5px; border: 1px solid var(--line); color: var(--ios-blue); }
+.a2hs .x { border: 0; background: none; color: var(--dim); font-size: 1em; cursor: pointer; padding: .2em; }
+/* 아이패드 세로: 글자를 조금 크게 */
+@media (min-width: 641px) and (max-aspect-ratio: 1/1) {
+  html, body { font-size: clamp(13px, 1.7vw, 17px); }
+  header { padding-top: max(1em, env(safe-area-inset-top)); }
+  main { padding-bottom: calc(1.4em + env(safe-area-inset-bottom)); }
+}

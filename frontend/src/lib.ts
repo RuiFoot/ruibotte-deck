@@ -124,7 +124,14 @@ export const shortCpu = (n?: string) =>
   (n || "").replace(/\(R\)|\(TM\)|CPU|Processor|\d+th Gen|@.*$/gi, "").replace(/\s+/g, " ").trim();
 
 /** 다른 기기에서 열었을 때 주소의 ?t= 토큰을 API 요청에 붙임 */
-const TOKEN = new URLSearchParams(location.search).get("t");
+// 주소의 ?t= 를 기억해 둠 → 홈 화면에 추가한 앱(주소에 토큰 없이 열림)에서도 계속 접속
+const TOKEN = (() => {
+  const t = new URLSearchParams(location.search).get("t");
+  try {
+    if (t) localStorage.setItem("rbd-token", t);
+    return t || localStorage.getItem("rbd-token");
+  } catch { return t; }
+})();
 export const apiUrl = (path: string) =>
   path + (TOKEN ? (path.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN) : "");
 

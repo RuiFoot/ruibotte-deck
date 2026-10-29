@@ -4,6 +4,7 @@ import { ago, api, applyTheme, fmtT, hm, store, themeFor, useClock, useDashboard
 import type { AiProvider, MachineRow, RemoteState, State } from "./types";
 import { Icon, Muted } from "./components/ui";
 import { SegTabs } from "./components/SegTabs";
+import { AddToHomeHint, FullscreenChip } from "./components/MobileHint";
 import { MachineView, fromLocal, fromRemote, machineAlert } from "./components/MachineView";
 import type { Machine } from "./components/MachineView";
 import { AiPanel, aiTabs } from "./components/AiPanel";
@@ -224,10 +225,12 @@ export default function App() {
             <button className="chip upd" title="새 버전 — 설정 > 정보에서 업데이트" onClick={() => { try { localStorage.setItem("settings-page", "about"); } catch { /* 저장 불가 */ } setShowSettings(true); }}>
               ⬆ {upd.latest} 업데이트</button>
           )}
+          <FullscreenChip />
           <button className="chip gear" title="설정" onClick={() => setShowSettings(true)}>{Icon.gear}</button>
         </div>
       </header>
 
+      <AddToHomeHint />
       <main>
         <section className="panel p-sys">
           <div className="phead">
