@@ -85,7 +85,8 @@ def monitor_setting():
 
 
 def open_window(fullscreen=True):
-    desktop.open_window(URL, monitor_setting(), fullscreen)
+    """이미 떠 있으면 앞으로 가져오기만. '일반 창으로 열기'는 모드를 바꾸므로 다시 엶."""
+    desktop.open_window(URL, monitor_setting(), fullscreen, force=not fullscreen)
 
 
 # ---------- 트레이 ----------
@@ -167,7 +168,11 @@ def main():
         made = desktop.install_shortcuts()
         print("shortcuts created:", *made) if made else print("이 OS에서는 바로가기를 만들지 않습니다. python3 tray.py 로 실행하세요.")
         return
-    if server_up() or (port_open() and wait_server(15)):
+    if "--restart" in sys.argv:   # 설정에서 '다시 시작': 이전 인스턴스가 포트를 놓을 때까지 기다린 뒤 새로 시작
+        end = time.time() + 30
+        while port_open() and time.time() < end:
+            time.sleep(0.5)
+    elif server_up() or (port_open() and wait_server(15)):
         # 이미 실행 중(트레이 아이콘이 이미 있음): 창만 다시 연다
         open_window()
         return

@@ -18,7 +18,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 IS_WIN, IS_MAC = sys.platform == "win32", sys.platform == "darwin"
 ICON = ROOT / "assets" / "icon.ico"
 APP_NAME = "RuiBotte Deck"
-APP_VERSION = "2.0.4"
+APP_VERSION = "2.1.0"
 REPO_URL = "https://github.com/RuiFoot/ruibotte-deck"
 LEGACY_NAMES = ("PC Dashboard", "DeskPulse")            # 예전 바로가기 이름 (자동 실행 확인·정리용)
 
@@ -80,6 +80,44 @@ def load_config():
         cfg.setdefault(k, v)
     cfg.setdefault("token", "")
     return cfg
+
+
+def save_config(**changes):
+    """config.json 일부 바꾸기 (bind 등 — 서버를 다시 켜야 적용)."""
+    path = DATA / "config.json"
+    cfg = load_config()
+    cfg.update(changes)
+    path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    return cfg
+
+
+def lan_addresses():
+    """같은 네트워크의 다른 기기가 쓸 이 PC 주소 (사설 IPv4, 가상 어댑터 제외, Wi-Fi·이더넷 먼저)."""
+    try:
+        import psutil
+        stats = psutil.net_if_stats()
+        out = []
+        for name, addrs in psutil.net_if_addrs().items():
+            if not (stats.get(name) and stats[name].isup):
+                continue
+            if any(k in name.lower() for k in ("vethernet", "wsl", "virtualbox", "vmware", "hyper-v", "loopback", "bluetooth", "docker")):
+                continue
+            for a in addrs:
+                ip = a.address
+                if a.family == 2 and not ip.startswith(("127.", "169.254.")):
+                    pref = 0 if any(k in name.lower() for k in ("wi-fi", "wifi", "wlan", "ethernet", "이더넷", "무선")) else 1
+                    out.append((pref, name, ip))
+        return [{"name": n, "ip": ip} for _, n, ip in sorted(out)]
+    except Exception:
+        return []
+
+
+def restart_app():
+    """앱 다시 시작: 새 인스턴스를 (이 앱의 자식이 아니게) 띄우고 이 프로세스는 끝냄. 새 인스턴스는 포트가 빌 때까지 기다림."""
+    exe, args, cwd = _launch()
+    cmd = ["cmd", "/c", "start", "", exe] + ([args.strip('"')] if args else []) + ["--restart"] if IS_WIN \
+        else [exe] + ([args.strip('"')] if args else []) + ["--restart"]
+    subprocess.Popen(cmd, cwd=str(cwd), creationflags=NO_WINDOW, close_fds=True, start_new_session=not IS_WIN)
 
 
 # ---------- 알림 ----------
@@ -187,8 +225,63 @@ def close_windows(quick=False):
         pass
 
 
-def open_window(url, monitor="auto", fullscreen=True):
-    """전용 앱 창으로 대시보드를 염. 전체 화면이면 고른 모니터 위치에 맞춤."""
+def find_window():
+    """열려 있는 대시보드 창(전용 앱 창: 제목이 앱 이름 그대로)의 핸들. Windows 전용, 없으면 None."""
+    if not IS_WIN:
+        return None
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        if user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+            cls, title = ctypes.create_unicode_buffer(64), ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, cls, 64)
+            user32.GetWindowTextW(hwnd, title, 256)
+            if cls.value == "Chrome_WidgetWin_1" and title.value == APP_NAME:
+                found.append(hwnd)
+                return False
+        return True
+    user32.EnumWindows(cb, 0)
+    return found[0] if found else None
+
+
+def focus_window():
+    """대시보드 창이 있으면 (최소화돼 있으면 되살려) 맨 앞으로. 성공하면 True."""
+    hwnd = find_window()
+    if not hwnd:
+        return False
+    import ctypes
+    user32 = ctypes.windll.user32
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)          # SW_RESTORE
+    user32.ShowWindow(hwnd, 5)              # SW_SHOW
+    if not user32.SetForegroundWindow(hwnd):
+        user32.keybd_event(0x12, 0, 0, 0)   # Alt 를 눌렀다 떼면 앞으로 가져오기 제한이 풀림 (Windows 알려진 방법)
+        user32.keybd_event(0x12, 0, 2, 0)
+        user32.SetForegroundWindow(hwnd)
+    return True
+
+
+_OPEN_LOCK = __import__("threading").Lock()
+
+
+def open_window(url, monitor="auto", fullscreen=True, force=False):
+    """대시보드 창: 이미 떠 있으면 앞으로 가져오기만, 없으면 전용 앱 창으로 염(전체 화면이면 고른 모니터에 맞춤).
+    force(일반 창으로 열기 등)면 닫고 새로 엶. 여러 번 눌러도 창이 하나만 뜨도록 한 번에 하나씩 처리."""
+    with _OPEN_LOCK:
+        if not force and focus_window():
+            return
+        _open_window(url, monitor, fullscreen)
+        if IS_WIN:   # 창이 실제로 뜰 때까지 기다림 → 그 사이 또 누르면 새 창 대신 앞으로 가져오기
+            end = time.time() + 10
+            while time.time() < end and not find_window():
+                time.sleep(0.25)
+
+
+def _open_window(url, monitor="auto", fullscreen=True):
     close_windows()
     exe = _browser()
     if not exe:

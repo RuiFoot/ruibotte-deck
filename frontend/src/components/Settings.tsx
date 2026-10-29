@@ -2,6 +2,7 @@
 // 분류: 일반 · PC · AI 도구별(Claude Code / GPT / Gemini) · 알림 · 기록 · 정보
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import QRCode from "qrcode";
 import { C, ago, api, hm, sunTimes, themeCoords, usePoll } from "../lib";
 import { Muted } from "./ui";
 import { Overlay } from "./SessionModal";
@@ -59,7 +60,7 @@ function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
 
 function Seg<T extends string>({ value, options, onChange, disabled }: { value: T; options: [T, string][]; onChange: (v: T) => void; disabled?: boolean }) {
   return (
-    <div className="seg">
+    <div className="ios-seg">
       {options.map(([v, l]) => <button key={v} className={value === v ? "on" : ""} disabled={disabled} onClick={() => onChange(v)}>{l}</button>)}
     </div>
   );
@@ -123,9 +124,7 @@ export function DisplayAndApp() {
     ...(D?.displays || []).map((d): [string, string] => [sameIds(d.id) ? d.device : d.id,
       `${d.internal ? "내장 화면" : d.id || d.device} · ${d.width}×${d.height}${d.primary ? " · 주 모니터" : ""}${sameIds(d.id) ? ` (${d.device.replace("\\\\.\\", "")})` : ""}`])];
   return (
-    <Group title="실행 · 화면" footer={<>
-      다른 기기 접속: {A ? (A.lan ? `켜짐 — 같은 네트워크에서 :${A.port}, 주소에 ?t=토큰` : "꺼짐 (이 PC에서만). config.json의 bind를 0.0.0.0으로 바꾸면 켜져요") : "…"}
-      <Msg m={msg} /></>}>
+    <Group title="실행 · 화면" footer={msg ? <Msg m={msg} /> : undefined}>
       <Row label="로그인할 때 자동 실행" sub={A?.platform === "win32" ? "시작프로그램 · 트레이 메뉴에서도 바꿀 수 있어요" : A?.platform === "darwin" ? "LaunchAgent" : "~/.config/autostart"}>
         <Switch on={!!A?.autostart} disabled={busy || !A} onChange={(v) => run(async () => { await api("/api/app", "PUT", { autostart: v }); setTick((t) => t + 1); })} />
       </Row>
@@ -140,11 +139,48 @@ export function DisplayAndApp() {
   );
 }
 
+interface Share { lan: boolean; active: boolean; needs_restart: boolean; port: number; addresses: { name: string; ip: string; url: string }[] }
+
+/** 다른 기기(아이패드·휴대폰)에서 보기: 스위치 → 다시 시작 → QR (접속 토큰 포함 주소) */
+function ShareGroup() {
+  const [tick, setTick] = useState(0);
+  const { data: S, error } = usePoll<Share>(`/api/app/share?_=${tick}`, 15000);
+  const { busy, msg, run } = useBusy();
+  const [qr, setQr] = useState<string | null>(null);
+  const url = S?.addresses[0]?.url;
+  useEffect(() => {
+    if (!url || !S?.active) { setQr(null); return; }
+    QRCode.toDataURL(url, { margin: 1, width: 360, color: { dark: "#111318", light: "#ffffff" } }).then(setQr).catch(() => setQr(null));
+  }, [url, S?.active]);
+  if (error && !S) return <Group title="다른 기기에서 보기"><Row label="이 PC 화면에서만 설정할 수 있어요" /></Group>;
+  if (!S) return null;
+  return (
+    <Group title="다른 기기에서 보기" footer={<>QR에는 접속 토큰이 들어 있어요 — 믿을 수 있는 기기로만 찍으세요. 처음 켤 때 Windows 방화벽 창이 뜨면
+      '개인 네트워크'를 허용하세요.<Msg m={msg} /></>}>
+      <Row label="같은 네트워크의 기기에서 접속" sub={S.active ? `켜짐 · 포트 ${S.port}` : "꺼짐 · 이 PC에서만"}>
+        <Switch on={S.lan} disabled={busy} onChange={(v) => run(async () => { await api("/api/app", "PUT", { lan: v }); setTick((t) => t + 1); })} />
+      </Row>
+      {S.needs_restart && (
+        <Row label="다시 시작하면 적용돼요" sub="앱이 잠깐 꺼졌다가 바로 다시 켜져요">
+          <button className="g-btn primary" disabled={busy} onClick={() => run(() => api("/api/app/restart", "POST"), "다시 시작하는 중… 잠시 뒤 창이 다시 열려요.")}>지금 다시 시작</button>
+        </Row>
+      )}
+      {S.active && (S.addresses.length ? (
+        <Row label={<div className="qr-box">{qr && <img src={qr} alt="접속 QR 코드" />}
+          <div className="qr-txt"><div className="t">아이패드·휴대폰 카메라로 찍으면 바로 열려요</div>
+            <code className="sel">{url}</code>
+            {S.addresses.length > 1 && <div className="s">다른 주소: {S.addresses.slice(1).map((a) => `${a.ip} (${a.name})`).join(", ")}</div>}</div></div>} />
+      ) : <Row label="네트워크 주소를 찾지 못했어요" sub="Wi-Fi나 이더넷에 연결돼 있는지 확인하세요" />)}
+    </Group>
+  );
+}
+
 function GeneralPage({ onWizard }: { onWizard?: () => void }) {
   return (
     <>
       <ThemeGroup />
       <DisplayAndApp />
+      <ShareGroup />
       {onWizard && <Group><Row label="처음 설정 다시 보기"><button className="g-btn" onClick={onWizard}>열기 ›</button></Row></Group>}
     </>
   );
@@ -426,20 +462,77 @@ function HistoryPage() {
 }
 
 // ---------- 정보 ----------
+interface UpdateInfo {
+  current: string; latest?: string | null; newer?: boolean; notes?: string; page?: string; error?: string | null; installed?: boolean;
+  checked_at?: number | null; state: { phase: "idle" | "downloading" | "installing" | "error"; pct?: number; version?: string; error?: string };
+}
+
+/** 업데이트: GitHub Releases 확인 → 받아서 설치 → 앱이 다시 켜짐 */
+function UpdateGroup() {
+  const [q, setQ] = useState("");
+  const { data: U } = usePoll<UpdateInfo>(`/api/update?_=${q}`, 2000);
+  const { busy, msg, run } = useBusy();
+  if (!U) return null;
+  const st = U.state;
+  const label = st.phase === "downloading" ? `${st.version} 받는 중… ${st.pct ?? 0}%`
+    : st.phase === "installing" ? `${st.version} 설치 중 — 앱이 잠깐 꺼졌다가 다시 켜져요`
+    : U.error ? U.error : U.newer ? `새 버전 ${U.latest}이 있어요` : `최신 버전이에요 (${U.current})`;
+  return (
+    <Group title="업데이트" footer={<>{U.checked_at ? `마지막 확인 ${ago(Date.now() / 1000 - U.checked_at)} · 6시간마다 자동 확인` : ""}
+      {st.phase === "error" && <div className="g-msg" style={{ color: C.red }}>{st.error}</div>}<Msg m={msg} /></>}>
+      <Row label={label} sub={U.newer && U.notes ? U.notes.split("\n").filter(Boolean).slice(0, 4).join(" · ") : undefined}>
+        {U.newer && st.phase !== "installing" && st.phase !== "downloading" ? (U.installed
+          ? <button className="g-btn primary" disabled={busy} onClick={() => run(() => api("/api/update/install", "POST"))}>지금 업데이트</button>
+          : <span className="g-val">소스 실행 중 — git pull</span>)
+          : <button className="g-btn" disabled={busy || st.phase === "downloading"} onClick={() => setQ(String(Date.now()))}>확인</button>}
+      </Row>
+      {st.phase === "downloading" && <Row label={<div className="bar"><i style={{ width: `${st.pct ?? 0}%`, background: "var(--ios-blue)" }} /></div>} />}
+    </Group>
+  );
+}
+
+function LogViewer({ onClose }: { onClose: () => void }) {
+  const { data } = usePoll<{ path: string; lines: string[]; errors: Record<string, string> }>("/api/logs?lines=400", 5000);
+  const errs = Object.entries(data?.errors || {});
+  return (
+    <Group title={<>로그 <button className="link" onClick={onClose}>닫기</button></>} footer={data?.path}>
+      {errs.length > 0 && <Row label={<span style={{ color: C.red }}>지금 난 오류 {errs.length}건</span>}
+        sub={errs.map(([k, v]) => `${k}: ${v}`).join("\n")} />}
+      <div className="logbox"><pre>{(data?.lines || []).join("\n") || "로그 없음"}</pre></div>
+    </Group>
+  );
+}
+
 function AboutPage() {
   const { data: A } = usePoll<AppInfo>("/api/app", 600000);
+  const [logs, setLogs] = useState(false);
+  const { busy, msg, run } = useBusy();
+  const issue = () => {
+    const body = [`- 버전: ${A?.version || "?"} (${A?.installed ? "설치판" : "소스"})`, `- OS: ${A?.platform || "?"}`, "",
+      "## 어떤 문제인가요?", "", "## 어떻게 하면 생기나요?", "",
+      "<!-- 설정 > 정보 > 로그 보기의 내용을 붙이면 도움이 돼요. 세션 제목·PC 이름 등 개인정보는 지우고 올려 주세요. -->"].join("\n");
+    window.open(`${A?.repo}/issues/new?title=${encodeURIComponent("[문제] ")}&body=${encodeURIComponent(body)}`, "_blank");
+  };
   return (
     <>
       <div className="about">
         <img src="/icon-192.png?v=2" alt="" />
         <div><div className="nm">{A?.name || "RuiBotte Deck"}</div><div className="muted">버전 {A?.version || "–"} · made by RuiBotte</div></div>
       </div>
-      <Group>
-        <Row label="소스 코드 · 새 버전" sub="GitHub Releases에서 설치 파일을 받아 덮어 설치하면 설정·기록이 유지돼요">
-          {A?.repo && <a className="g-btn" href={A.repo + "/releases"} target="_blank" rel="noreferrer">열기 ›</a>}
+      <UpdateGroup />
+      <Group title="문제 해결" footer={<Msg m={msg} />}>
+        <Row label="로그 보기" sub="최근 기록·지금 난 오류"><button className="g-btn" onClick={() => setLogs(!logs)}>{logs ? "닫기" : "보기"}</button></Row>
+        <Row label="데이터 폴더" sub={A?.data_dir || "설정·기록(DB)·로그"}>
+          <button className="g-btn" disabled={busy} onClick={() => run(() => api("/api/app/open-folder", "POST"))}>열기</button>
         </Row>
+        <Row label="문제 보고" sub="GitHub에 새 이슈 쓰기 (버전·OS가 미리 채워져요)">
+          {A?.repo && <button className="g-btn" onClick={issue}>보고하기 ›</button>}
+        </Row>
+      </Group>
+      {logs && <LogViewer onClose={() => setLogs(false)} />}
+      <Group>
+        <Row label="소스 코드" sub="GitHub">{A?.repo && <a className="g-btn" href={A.repo} target="_blank" rel="noreferrer">열기 ›</a>}</Row>
         <Row label="설치 방식" sub={A?.installed ? "설치판 · 제거는 Windows 설정 > 앱" : "소스에서 실행 중"} />
-        <Row label="데이터 폴더" sub="설정·기록(DB)·로그"><code className="sel">{A?.data_dir || "–"}</code></Row>
       </Group>
     </>
   );

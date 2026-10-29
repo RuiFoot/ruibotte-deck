@@ -300,6 +300,14 @@ class AlertsTest(unittest.TestCase):
         self.assertEqual(self.sent, [])
 
 
+class UpdaterTest(unittest.TestCase):
+    def test_version_compare(self):
+        from updater import ver_tuple
+        self.assertTrue(ver_tuple("v2.1.0") > ver_tuple("2.0.4"))
+        self.assertTrue(ver_tuple("2.0.10") > ver_tuple("2.0.9"))
+        self.assertFalse(ver_tuple("v2.0.4") > ver_tuple("2.0.4"))
+
+
 class MachinesTest(unittest.TestCase):
     def test_targets(self):
         self.assertEqual(normalize_target("me@box:2222"), "ssh://me@box:2222")

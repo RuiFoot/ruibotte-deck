@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ago, api, applyTheme, fmtT, hm, store, themeFor, useClock, useDashboardState } from "./lib";
+import { ago, api, applyTheme, fmtT, hm, store, themeFor, useClock, useDashboardState, usePoll } from "./lib";
 import type { AiProvider, MachineRow, RemoteState, State } from "./types";
 import { Icon, Muted } from "./components/ui";
 import { SegTabs } from "./components/SegTabs";
@@ -78,6 +78,8 @@ export default function App() {
   const [browse, setBrowse] = useState<string | null>(null);
   const [wizard, setWizard] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
+  // 새 버전 알림 (서버가 6시간마다 GitHub 확인, 여기서는 30분마다 결과만 읽음)
+  const { data: upd } = usePoll<{ newer?: boolean; latest?: string | null }>("/api/update", 1800000);
   const [alertSeen, setAlertSeen] = useState<number>(() => store.get("alert-seen", 0));
   const [wizardSeen, setWizardSeen] = useState(false);
   const showWizard = wizard || (s?.setup_done === false && !wizardSeen);
@@ -218,6 +220,10 @@ export default function App() {
               }}><span className="d" />알림{unread ? ` ${unread}` : ""}</button>
             );
           })()}
+          {upd?.newer && (
+            <button className="chip upd" title="새 버전 — 설정 > 정보에서 업데이트" onClick={() => { try { localStorage.setItem("settings-page", "about"); } catch { /* 저장 불가 */ } setShowSettings(true); }}>
+              ⬆ {upd.latest} 업데이트</button>
+          )}
           <button className="chip gear" title="설정" onClick={() => setShowSettings(true)}>{Icon.gear}</button>
         </div>
       </header>

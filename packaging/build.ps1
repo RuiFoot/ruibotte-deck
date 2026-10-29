@@ -4,15 +4,23 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
+# 버전: desktop.py 의 APP_VERSION (한 곳에서만 관리)
+$ver = [regex]::Match((Get-Content desktop.py -Raw), 'APP_VERSION = "([0-9.]+)"').Groups[1].Value
+if (-not $ver) { throw 'APP_VERSION not found in desktop.py' }
+Write-Host "version $ver"
+# GitHub Actions 등 py 런처가 없는 곳에서는 python
+$py = if (Get-Command py -ErrorAction SilentlyContinue) { 'py' } else { 'python' }
 
 Write-Host '[1/3] frontend build'
 Push-Location frontend
 if (-not (Test-Path node_modules)) { npm ci }
 npm run build
+if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
 Pop-Location
 
 Write-Host '[2/3] PyInstaller'
-py -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\ruibotte-deck.spec
+& $py -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\ruibotte-deck.spec
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed ($LASTEXITCODE)" }
 
 Write-Host '[3/3] Inno Setup'
 $iscc = @(
@@ -21,5 +29,11 @@ $iscc = @(
   "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw 'Inno Setup 6 (ISCC.exe) not found: winget install JRSoftware.InnoSetup' }
-& $iscc packaging\installer.iss
+# 백신이 막 만든 exe를 검사하는 동안 'EndUpdateResource failed'가 가끔 남 → 잠시 뒤 다시 (최대 3번)
+for ($i = 1; $i -le 3; $i++) {
+  & $iscc "/DAppVersion=$ver" packaging\installer.iss
+  if ($LASTEXITCODE -eq 0) { break }
+  if ($i -eq 3) { throw "ISCC failed ($LASTEXITCODE)" }
+  Start-Sleep 5
+}
 Write-Host 'done:' (Get-ChildItem dist\RuiBotteDeck-Setup-*.exe | Select-Object -Last 1).FullName

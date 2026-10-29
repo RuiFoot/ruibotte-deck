@@ -1,0 +1,64 @@
+# 태그(v2.1.0 등)를 올리면 Windows에서 시험 → 설치 파일 빌드 → GitHub Release에 첨부
+# 릴리스 순서: desktop.py 의 APP_VERSION 올리기 → 커밋 → git tag v<버전> → git push --tags
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Python packages
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Tag matches APP_VERSION
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ver = [regex]::Match((Get-Content desktop.py -Raw), 'APP_VERSION = "([0-9.]+)"').Groups[1].Value
+          if ("v$ver" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} != APP_VERSION $ver" }
+
+      - name: Tests
+        run: python -m unittest discover -s tests
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Build installer
+        shell: pwsh
+        run: ./packaging/build.ps1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/RuiBotteDeck-Setup-*.exe
+
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/RuiBotteDeck-Setup-*.exe
+          generate_release_notes: true

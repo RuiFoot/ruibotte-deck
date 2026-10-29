@@ -41,6 +41,7 @@ from machines import LocalMachine, RemoteMachine, detect, normalize_target, vali
 from store import DEFAULTS, Store  # noqa: E402
 from pricing import PRICES_AS_OF, cost_usd  # noqa: E402
 from alerts import KINDS as ALERT_KINDS, Alerts  # noqa: E402
+from updater import UPDATER  # noqa: E402
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")   # 앱 정보 파일 (설치형 웹앱)
 
@@ -582,6 +583,7 @@ def start_collectors():
                      args=(setting("interval.claude_sec", CFG["claude_interval_sec"]), pricing)).start()
     threading.Thread(target=machines_loop, daemon=True, name="machines").start()
     threading.Thread(target=alerts_loop, daemon=True, name="alerts").start()
+    threading.Thread(target=UPDATER.background, args=(lambda t, m: desktop.notify(t, m),), daemon=True, name="update-check").start()
 
 
 ALERTS = Alerts(send=lambda title, msg: desktop.notify(title, msg),
@@ -1057,6 +1059,27 @@ def profile_login(request: Request, body: dict = Body(...)):
             + (f" 이 계정으로 쓰려면 {env} 를 이 폴더로 지정해 CLI를 실행하세요." if folder else "")}
 
 
+# ---------- 업데이트 (updater.py) ----------
+@app.get("/api/update")
+def get_update(check: int = 0):
+    """최신 버전 정보 + 설치 진행 상황. check=1 이면 지금 다시 확인."""
+    if check or not UPDATER.info:
+        UPDATER.check(force=bool(check))
+    return UPDATER.status()
+
+
+@app.post("/api/update/install")
+def install_update(request: Request):
+    """받아서 설치 시작 (이 PC에서만). 설치 프로그램이 앱을 끝내고 설치한 뒤 다시 실행."""
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "이 PC의 대시보드 화면에서만 할 수 있어요")
+    try:
+        UPDATER.install()
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return UPDATER.status()
+
+
 @app.get("/api/notify")
 def get_notify():
     return {"kinds": ALERT_KINDS, "enabled": {k: bool(setting(f"notify.{k}", True)) for k in ALERT_KINDS},
@@ -1086,6 +1109,69 @@ def get_app_info():
             "installed": desktop.FROZEN, "data_dir": str(desktop.DATA)}
 
 
+@app.get("/api/app/share")
+def app_share(request: Request):
+    """다른 기기 접속 정보 (토큰 포함 주소 → 화면의 QR). 토큰이 들어 있으니 이 PC에서만."""
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "이 PC에서만 볼 수 있어요")
+    cfg = desktop.load_config()
+    want = cfg.get("bind") not in ("127.0.0.1", "localhost", "::1")
+    running = CFG.get("bind") not in ("127.0.0.1", "localhost", "::1")
+    addrs = desktop.lan_addresses()
+    return {"lan": want, "active": running, "needs_restart": want != running, "port": CFG["port"],
+            "addresses": [{**a, "url": f"http://{a['ip']}:{CFG['port']}/?t={cfg.get('token', '')}"} for a in addrs]}
+
+
+@app.get("/api/logs")
+def get_logs(request: Request, lines: int = 300):
+    """server.log 끝부분 (설정 > 정보 > 로그 보기). 세션 제목 등이 들어 있으니 이 PC에서만."""
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "이 PC에서만 볼 수 있어요")
+    path = desktop.DATA / "server.log"
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 400_000))
+            text = f.read().decode("utf-8", "replace")
+    except OSError:
+        text = ""
+    out = text.splitlines()[-max(20, min(2000, lines)):]
+    return {"path": str(path), "lines": out, "errors": {k: v.splitlines()[-1][:300] for k, v in ERRORS.items()}}
+
+
+@app.post("/api/app/open-folder")
+def open_data_folder(request: Request):
+    """데이터 폴더(설정·기록·로그)를 탐색기로 열기 (이 PC에서만)."""
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "이 PC에서만 할 수 있어요")
+    if sys.platform == "win32":
+        os.startfile(str(desktop.DATA))   # noqa: S606
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(desktop.DATA)])
+    else:
+        subprocess.Popen(["xdg-open", str(desktop.DATA)])
+    return {"ok": True}
+
+
+@app.post("/api/app/restart")
+def app_restart(request: Request):
+    """앱 다시 시작 (다른 기기 접속 켜기/끄기 적용 등). 이 PC에서만."""
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "이 PC에서만 할 수 있어요")
+
+    def later():
+        time.sleep(0.8)
+        try:
+            shutdown()
+        except Exception:
+            pass
+        desktop.restart_app()
+        desktop.close_windows(quick=True)
+        os._exit(0)
+    threading.Thread(target=later, daemon=True).start()
+    return {"ok": True}
+
+
 @app.put("/api/app")
 def put_app_info(request: Request, body: dict = Body(...)):
     """자동 실행 켜기/끄기 — 이 PC의 시작 프로그램을 바꾸므로 같은 PC에서만."""
@@ -1093,6 +1179,10 @@ def put_app_info(request: Request, body: dict = Body(...)):
         raise HTTPException(403, "이 PC에서만 바꿀 수 있습니다")
     if "autostart" in body:
         desktop.set_autostart(bool(body["autostart"]))
+    if "lan" in body:   # 다른 기기 접속: bind 를 바꾸고, 앱을 다시 시작하면 적용 (토큰이 없으면 새로 만듦)
+        import secrets
+        cfg = desktop.load_config()
+        desktop.save_config(bind="0.0.0.0" if body["lan"] else "127.0.0.1", token=cfg.get("token") or secrets.token_urlsafe(9))
     return get_app_info()
 
 
