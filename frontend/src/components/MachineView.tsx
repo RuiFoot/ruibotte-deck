@@ -6,6 +6,7 @@ import type { Container, LocalExtras, LocalState, Proc, RemoteState } from "../t
 import { C, CPU_STOPS, ago, fmtB, fmtDur, fmtRate, level, scaleColor, scaleCss, shortCpu, store, usePoll } from "../lib";
 import { BarRow, Card, Gauge, Head, Icon, Muted } from "./ui";
 import { NetChart, SystemHistory } from "./charts";
+import { TunnelPanel } from "./Tunnels";
 
 interface Gpu { name: string; util?: number | null; temp?: number | null; note?: string; memUsed?: number; memTotal?: number; sharedUsed?: number | null }
 interface WslInfo { load?: { l1: number; cpus: number } | null; mem?: { used: number; total: number } | null }
@@ -186,7 +187,7 @@ function HistoryCard({ M }: { M: Machine }) {
   );
 }
 
-type DetailTab = "proc" | "sys" | "disk" | "docker" | "net";
+type DetailTab = "proc" | "sys" | "disk" | "docker" | "net" | "tun";
 
 const NET_RANGES: [string, string][] = [["1h", "1시간"], ["24h", "24시간"], ["7d", "7일"], ["30d", "30일"]];
 const ms = (v?: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}초` : `${Math.round(v)}ms`);
@@ -226,8 +227,8 @@ function DetailCard({ M }: { M: Machine }) {
   const tabs: [DetailTab, string, boolean][] = [["proc", "프로세스", false], ["sys", "시스템", false],
     ["disk", "디스크·GPU", gpuAlert || diskAlert], ["docker", cs.length ? `Docker ${running}/${cs.length}` : "Docker", dockAlert]];
   const remote = !!M.id && M.id !== "local";
-  if (remote) tabs.push(["net", "연결", !M.ok]);
-  const cur: DetailTab = tab === "net" && !remote ? "proc" : tab;
+  if (remote) tabs.push(["net", "연결", !M.ok], ["tun", "터널", false]);
+  const cur: DetailTab = (tab === "net" || tab === "tun") && !remote ? "proc" : tab;
   const procRows = pt === "cpu"
     ? M.topCpu.slice(0, 8).map((p, i) => <BarRow key={i} name={p.name} pct={p.cpu} value={`${(p.cpu ?? 0).toFixed(1)}%`} />)
     : M.topMem.slice(0, 8).map((p, i) => <BarRow key={i} name={p.name} pct={((p.mem ?? 0) / M.memTotal) * 300} value={fmtB(p.mem)} color={C.violet} warn={false} />);
@@ -246,6 +247,7 @@ function DetailCard({ M }: { M: Machine }) {
         </span>) : cur === "disk" ? M.battery : null}>
       <div className={`m-detail-body ${cur === "net" ? "" : "scroll"}`}>
         {cur === "net" && remote && <NetPanel id={M.id!} rng={nr} />}
+        {cur === "tun" && remote && <TunnelPanel id={M.id!} />}
         {cur === "proc" && (procRows.length ? <div className="cols2">{procRows}</div> : <Muted>정보 없음</Muted>)}
         {cur === "sys" && (
           <div className="info-grid four">

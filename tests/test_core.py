@@ -343,6 +343,25 @@ class MachinesTest(unittest.TestCase):
         self.assertEqual(framed(b), str(len(b)).encode() + b"\n" + b)
 
 
+class TunnelsTest(unittest.TestCase):
+    def test_add_and_validate(self):
+        from tunnels import Tunnels
+        tn = Tunnels(None, lambda mid: ["box"])
+        t = tn.add({"machine": "box", "local": "19443", "remote": 9443, "scheme": "https"})
+        self.assertEqual((t["local"], t["remote"], t["host"], t["scheme"]), (19443, 9443, "localhost", "https"))
+        self.assertEqual(tn.add({"machine": "box", "local": 8080})["remote"], 8080)   # 원격 포트 생략 = 같은 번호
+        self.assertEqual([x["state"] for x in tn.list("box")], ["off", "off"])
+        for bad in ({"machine": "box", "local": 19443},               # 같은 로컬 포트
+                    {"machine": "box", "local": 70000},
+                    {"machine": "box", "local": "abc"},
+                    {"machine": "box", "local": 1, "host": "-oProxyCommand=x"},
+                    {"local": 1234}):
+            with self.assertRaises(ValueError):
+                tn.add(bad)
+        tn.remove(t["id"])
+        self.assertEqual(len(tn.list()), 1)
+
+
 if __name__ == "__main__":
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     unittest.main()

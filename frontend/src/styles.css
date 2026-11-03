@@ -173,6 +173,15 @@ main { flex: 1; min-height: 0; padding: 0.3em 1.6em 1.4em; display: grid; grid-t
 .ctr .s, .sess .s { color: var(--dim); font-size: 0.72em; margin-top: 0.12em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctr .m { margin-left: auto; text-align: right; font-size: 0.78em; color: var(--dim); white-space: nowrap; line-height: 1.5; }
 .ctr .m b { color: var(--text); font-weight: 600; }
+
+/* SSH 터널 (Tunnels.tsx) */
+.tun-act { display: flex; gap: .35em; flex: none; }
+.tun-act a.g-btn { text-decoration: none; color: inherit; }
+.tun-add { display: flex; flex-wrap: wrap; align-items: center; gap: .4em; margin-top: .6em; font-size: .92em; }
+.tun-add .g-in { text-align: left; }
+.tun-add .g-in.num { width: 6.5em; }
+.tun-add .g-in:first-child { flex: 1; min-width: 9em; }
+.tun-add label { display: inline-flex; align-items: center; gap: .25em; font-size: .85em; cursor: pointer; }
 .sess .st { background: var(--faint); }
 .sess.working { background: linear-gradient(90deg, rgba(67,211,158,.1), var(--panel2) 60%); }
 .sess.working .st, .livedot.on { background: var(--green); animation: pulse 1.4s infinite; }

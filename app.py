@@ -42,6 +42,7 @@ from store import DEFAULTS, Store  # noqa: E402
 from pricing import PRICES_AS_OF, cost_usd  # noqa: E402
 from alerts import KINDS as ALERT_KINDS, Alerts  # noqa: E402
 from updater import UPDATER  # noqa: E402
+from tunnels import Tunnels  # noqa: E402
 import secure  # noqa: E402
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")   # 앱 정보 파일 (설치형 웹앱)
@@ -93,6 +94,19 @@ LOCAL_PROV = {}         # (provider, 키) -> 이 PC의 ProviderRunner (키: 기�
 PSTATE_LOCAL = {}       # provider -> {키: 이 PC의 최신 결과 {ok, error, updated, usage, sessions, limits, account}}
 PLAN_EXTRA = {}         # 프로필 id -> 다른 계정 폴더의 PlanAPI (Claude 정확한 한도)
 PLAN = {"api": None}   # Claude 계정 사용량 API (화면의 '새로고침'에서 바로 다시 시도)
+
+
+def tunnel_targets(mid):
+    """터널용 SSH 대상: 원격 PC가 지금 연결된 주소를 앞에, 나머지(대체 주소)를 뒤에."""
+    with MLOCK:
+        m = MACHINES.get(mid)
+        if m:
+            return m._order()
+    row = next((r for r in machine_rows() if r["id"] == mid and r["kind"] == "ssh"), None)
+    return [row["ssh_target"], *row.get("ssh_fallbacks", [])] if row else []
+
+
+TUNNELS = Tunnels(STORE, tunnel_targets)
 
 
 def load_cache():
@@ -614,7 +628,8 @@ def alerts_loop():
 
 
 def shutdown():
-    """종료 직전 정리: 원격 연결 끊기(원격 에이전트도 곧 스스로 종료), 진행 중인 분 기록 저장. 트레이 '종료'에서도 호출."""
+    """종료 직전 정리: 원격 연결·터널 끊기(원격 에이전트도 곧 스스로 종료), 진행 중인 분 기록 저장. 트레이 '종료'에서도 호출."""
+    TUNNELS.stop_all()
     with MLOCK:
         for m in MACHINES.values():
             m.stop()
@@ -892,7 +907,49 @@ def delete_machine(mid: str):
         STORE.delete_machine(mid)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    TUNNELS.remove_machine(mid)
     apply_machines()
+    return {"ok": True}
+
+
+# ---------- SSH 터널 (원격 PC 포트 → 이 PC localhost) — tunnels.py ----------
+@app.get("/api/tunnels")
+def list_tunnels(machine: str | None = None):
+    return _json({"tunnels": TUNNELS.list(machine)})
+
+
+@app.post("/api/tunnels")
+def add_tunnel(body: dict = Body(...)):
+    if not tunnel_targets(str(body.get("machine") or "")):
+        raise HTTPException(400, "원격 PC를 골라 주세요")
+    try:
+        t = TUNNELS.add(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if body.get("start"):
+        tunnel_action(t["id"], "start")
+    return {"ok": True, "tunnel": t}
+
+
+@app.delete("/api/tunnels/{tid}")
+def delete_tunnel(tid: str):
+    try:
+        TUNNELS.remove(tid)
+    except KeyError:
+        raise HTTPException(404, "없는 터널")
+    return {"ok": True}
+
+
+@app.post("/api/tunnels/{tid}/{action}")
+def tunnel_action(tid: str, action: str):
+    if action not in ("start", "stop"):
+        raise HTTPException(404, "알 수 없는 동작")
+    try:
+        TUNNELS.start(tid) if action == "start" else TUNNELS.stop(tid)
+    except KeyError:
+        raise HTTPException(404, "없는 터널")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
     return {"ok": True}
 
 
