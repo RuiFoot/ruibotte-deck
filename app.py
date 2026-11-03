@@ -42,7 +42,7 @@ from store import DEFAULTS, Store  # noqa: E402
 from pricing import PRICES_AS_OF, cost_usd  # noqa: E402
 from alerts import KINDS as ALERT_KINDS, Alerts  # noqa: E402
 from updater import UPDATER  # noqa: E402
-from tunnels import Tunnels  # noqa: E402
+from tunnels import Tunnels, remote_ports  # noqa: E402
 import secure  # noqa: E402
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")   # 앱 정보 파일 (설치형 웹앱)
@@ -931,6 +931,34 @@ def add_tunnel(body: dict = Body(...)):
     return {"ok": True, "tunnel": t}
 
 
+@app.get("/api/tunnels/ports")
+def tunnel_ports(machine: str):
+    """원격 PC에서 지금 열려 있는 포트 (SSH 한 번, 수 초). 터널 탭에서 골라 바로 열기용."""
+    targets = tunnel_targets(machine)
+    if not targets:
+        raise HTTPException(404, "없는 원격 PC")
+    with MLOCK:
+        m = MACHINES.get(machine)
+    os_name = ((m.info or {}).get("os") if m else None) or "windows"
+    try:
+        return {"ports": remote_ports(targets[0], os_name), "target": targets[0], "checked_at": time.time()}
+    except Exception as e:
+        raise HTTPException(502, f"포트 목록을 가져오지 못했어요: {str(e)[:200]}")
+
+
+@app.post("/api/tunnels/quick")
+def tunnel_quick(body: dict = Body(...)):
+    """열린 포트에서 '열기': 같은 포트 터널이 있으면 켜고, 없으면 임시 터널(끄면 사라짐)을 만들어 켬."""
+    if not tunnel_targets(str(body.get("machine") or "")):
+        raise HTTPException(400, "원격 PC를 골라 주세요")
+    try:
+        t = TUNNELS.quick(str(body["machine"]), body.get("remote"), str(body.get("name") or "")[:40],
+                          v4=body.get("v4", True) is not False)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True, "tunnel": t}
+
+
 @app.delete("/api/tunnels/{tid}")
 def delete_tunnel(tid: str):
     try:
@@ -942,10 +970,11 @@ def delete_tunnel(tid: str):
 
 @app.post("/api/tunnels/{tid}/{action}")
 def tunnel_action(tid: str, action: str):
-    if action not in ("start", "stop"):
+    fn = {"start": TUNNELS.start, "stop": TUNNELS.stop, "keep": TUNNELS.keep}.get(action)   # keep = 임시 → 저장
+    if not fn:
         raise HTTPException(404, "알 수 없는 동작")
     try:
-        TUNNELS.start(tid) if action == "start" else TUNNELS.stop(tid)
+        fn(tid)
     except KeyError:
         raise HTTPException(404, "없는 터널")
     except ValueError as e:

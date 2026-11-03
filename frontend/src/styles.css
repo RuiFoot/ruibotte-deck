@@ -177,11 +177,20 @@ main { flex: 1; min-height: 0; padding: 0.3em 1.6em 1.4em; display: grid; grid-t
 /* SSH 터널 (Tunnels.tsx) */
 .tun-act { display: flex; gap: .35em; flex: none; }
 .tun-act a.g-btn { text-decoration: none; color: inherit; }
-.tun-add { display: flex; flex-wrap: wrap; align-items: center; gap: .4em; margin-top: .6em; font-size: .92em; }
-.tun-add .g-in { text-align: left; }
-.tun-add .g-in.num { width: 6.5em; }
-.tun-add .g-in:first-child { flex: 1; min-width: 9em; }
-.tun-add label { display: inline-flex; align-items: center; gap: .25em; font-size: .85em; cursor: pointer; }
+.tun-tag { margin-left: .5em; font-size: .72em; font-weight: 500; color: var(--dim); border: 1px solid var(--line); border-radius: 5px; padding: 0 .35em; }
+.tun-head { display: flex; align-items: center; gap: .6em; margin: .7em 0 .4em; }
+.tun-head > span:first-child { flex: 1; }
+.tun-head .muted { font-size: .85em; font-weight: 400; }
+.tun-ports { display: flex; flex-wrap: wrap; gap: .4em; }
+.tun-port { position: relative; display: inline-flex; align-items: baseline; gap: .4em; font: inherit; font-size: .85em; color: var(--text);
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: .35em .7em; cursor: pointer; }
+.tun-port:hover { border-color: color-mix(in srgb, var(--blue) 60%, transparent); }
+.tun-port.on { border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+.tun-port span { color: var(--dim); font-size: .88em; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tun-port i { position: absolute; top: .3em; right: .3em; width: .45em; height: .45em; border-radius: 50%; }
+.tun-add { display: flex; flex-wrap: wrap; align-items: center; gap: .4em; margin-top: .7em; font-size: .92em; }
+.tun-add .g-in.num { width: 6.5em; text-align: left; }
+.tun-hint { font-size: .8em; }
 .sess .st { background: var(--faint); }
 .sess.working { background: linear-gradient(90deg, rgba(67,211,158,.1), var(--panel2) 60%); }
 .sess.working .st, .livedot.on { background: var(--green); animation: pulse 1.4s infinite; }

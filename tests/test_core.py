@@ -348,7 +348,7 @@ class TunnelsTest(unittest.TestCase):
         from tunnels import Tunnels
         tn = Tunnels(None, lambda mid: ["box"])
         t = tn.add({"machine": "box", "local": "19443", "remote": 9443, "scheme": "https"})
-        self.assertEqual((t["local"], t["remote"], t["host"], t["scheme"]), (19443, 9443, "localhost", "https"))
+        self.assertEqual((t["local"], t["remote"], t["host"], t["scheme"]), (19443, 9443, "127.0.0.1", "https"))
         self.assertEqual(tn.add({"machine": "box", "local": 8080})["remote"], 8080)   # 원격 포트 생략 = 같은 번호
         self.assertEqual([x["state"] for x in tn.list("box")], ["off", "off"])
         for bad in ({"machine": "box", "local": 19443},               # 같은 로컬 포트
@@ -360,6 +360,56 @@ class TunnelsTest(unittest.TestCase):
                 tn.add(bad)
         tn.remove(t["id"])
         self.assertEqual(len(tn.list()), 1)
+
+    def test_on_survives_restart(self):
+        import tunnels
+        from tunnels import Tunnels
+        _real_port_free = tunnels._port_free
+
+        class FakeStore(dict):
+            def set(self, k, v):
+                self[k] = json.loads(json.dumps(v))
+
+        db = FakeStore()
+        a = Tunnels(db, lambda mid: ["box"])
+        t1, t2 = a.add({"machine": "box", "local": 1}), a.add({"machine": "box", "local": 2})
+        spawned = []
+        orig = Tunnels._spawn
+        Tunnels._spawn = lambda self, r, st: spawned.append(r["id"])   # ssh 를 실제로 띄우지 않음
+        tunnels._port_free = lambda port: True
+        try:
+            a.start(t1["id"]); a.start(t2["id"]); a.stop(t2["id"])
+            a.stop_all()                                # 앱 종료: on 유지
+            b = Tunnels(db, lambda mid: ["box"])        # 앱 다시 켬
+            self.assertEqual(set(b.run), {t1["id"]})    # 켜 둔 것만 자동 연결 대기
+            self.assertEqual(b.list()[0]["state"], "connecting")
+        finally:
+            Tunnels._spawn = orig
+            tunnels._port_free = _real_port_free
+
+    def test_quick_temp_and_auto_port(self):
+        from tunnels import Tunnels, guess_scheme, _parse_ss
+        tn = Tunnels(None, lambda mid: ["box"])
+        saved = tn.add({"machine": "box", "local": 3000})
+        auto = tn.add({"machine": "box", "remote": 3000})     # 3000 은 이미 터널이 씀 → 13000
+        self.assertEqual(auto["local"], 13000)
+        orig = Tunnels._spawn
+        Tunnels._spawn = lambda self, r, st: None
+        try:
+            q = tn.quick("box", 3000)                          # 같은 원격 포트의 저장된 터널을 켬 (새로 안 만듦)
+            self.assertEqual(q["id"], saved["id"])
+            t = tn.quick("box", 59999, "node")
+            self.assertTrue(t["temp"])
+            tn.stop(t["id"])                                   # 임시는 끄면 사라짐
+            self.assertNotIn(t["id"], [x["id"] for x in tn.list()])
+            t = tn.quick("box", 59998)
+            tn.keep(t["id"]); tn.stop(t["id"])                 # 📌 저장한 건 남음
+            self.assertIn(t["id"], [x["id"] for x in tn.list()])
+        finally:
+            Tunnels._spawn = orig
+        self.assertEqual((guess_scheme(9443), guess_scheme(3000)), ("https", "http"))
+        self.assertEqual(list(_parse_ss('LISTEN 0 511 0.0.0.0:5173 0.0.0.0:* users:(("node",pid=1,fd=20))')),
+                         [("0.0.0.0", "5173", "node")])
 
 
 if __name__ == "__main__":
