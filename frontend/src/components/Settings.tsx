@@ -508,8 +508,8 @@ interface UpdateInfo {
 
 /** 업데이트: GitHub Releases 확인 → 받아서 설치 → 앱이 다시 켜짐 */
 function UpdateGroup() {
-  const [q, setQ] = useState("");
-  const { data: U } = usePoll<UpdateInfo>(`/api/update?_=${q}`, 2000);
+  // '확인'은 check=1 로 서버가 GitHub에 다시 묻게 함 (결과는 2초 폴링이 가져옴). 전엔 주소만 바꿔 6시간 캐시를 그대로 받았음
+  const { data: U } = usePoll<UpdateInfo>("/api/update", 2000);
   const { busy, msg, run } = useBusy();
   if (!U) return null;
   const st = U.state;
@@ -523,7 +523,8 @@ function UpdateGroup() {
         {U.newer && st.phase !== "installing" && st.phase !== "downloading" ? (U.installed
           ? <button className="g-btn primary" disabled={busy} onClick={() => run(() => api("/api/update/install", "POST"))}>지금 업데이트</button>
           : <span className="g-val">소스 실행 중 — git pull</span>)
-          : <button className="g-btn" disabled={busy || st.phase === "downloading"} onClick={() => setQ(String(Date.now()))}>확인</button>}
+          : <button className="g-btn" disabled={busy || st.phase === "downloading"}
+              onClick={() => run(() => api("/api/update?check=1"))}>{busy ? "확인 중…" : "확인"}</button>}
       </Row>
       {st.phase === "downloading" && <Row label={<div className="bar"><i style={{ width: `${st.pct ?? 0}%`, background: "var(--ios-blue)" }} /></div>} />}
     </Group>
