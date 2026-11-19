@@ -111,7 +111,7 @@ export function AiPanel({ pid, P, tab, onTab, names, now, running, durationSec, 
         </div>
       )}
       <LimitsCard pid={pid} label={P.label} L={L} now={now} machineName={(id) => (id === "api" ? "" : names(id))}
-        account={L?.label || (accts.length > 1 ? mainLabel : undefined)} main={!L?.label || L.label === mainLabel} />
+        account={L?.label || (accts.length > 1 ? mainLabel : undefined)} main={!mainLabel || L?.label === mainLabel} />
       <div className="views">
         <div className="view on">
           <ClaudeView head={head} U={U} S={S} now={now} stops={col.stops} onSession={onSession} history={history} historyTitle={historyTitle}
