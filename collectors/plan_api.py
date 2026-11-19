@@ -139,6 +139,10 @@ class PlanAPI:
         now = time.time()
         if now - self.cli_renew_at < CLI_RENEW_GAP:
             return False
+        if self._refresh_expired():   # 갱신 토큰 자체가 만료 → CLI도 갱신 못 하고 로그인 정보를 비워 버림. 실행하지 않음
+            self.login_required = True
+            _log("CLI 대신 갱신 건너뜀 — 로그인 기간(갱신 토큰) 만료, 다시 로그인 필요")
+            return False
         self.cli_renew_at = now
         exe = find_claude_cli()
         if not exe:
@@ -170,11 +174,39 @@ class PlanAPI:
                 p.kill()
             except Exception:
                 pass
+        why = "파일 변화 없음"
+        if ok:   # 파일이 바뀌어도 토큰이 비었거나 만료면 실패 (CLI가 로그아웃시킨 경우)
+            try:
+                _, o = self._load()
+                ok = bool(o.get("accessToken")) and (o.get("expiresAt") or 0) / 1000 > time.time() + 60
+            except Exception:
+                ok = False
+            why = "CLI가 로그인 정보를 비움 — 다시 로그인 필요"
+            if not ok:
+                self.login_required = True
         self.cli_renew_ok = ok
         if ok:
             self.cred_mtime = self.cred_path.stat().st_mtime   # 우리가 일으킨 변경: 재로그인으로 오인하지 않게
-        _log(f"CLI로 대신 갱신 {'성공' if ok else '실패(파일 변화 없음)'} ({time.time() - now:.1f}초)")
+        _log(f"CLI로 대신 갱신 {'성공' if ok else '실패(' + why + ')'} ({time.time() - now:.1f}초)")
         return ok
+
+    def _refresh_expired(self):
+        """로그인 기간(갱신 토큰 만료 시각)이 지났는지. 정보가 없으면 False."""
+        try:
+            _, o = self._load()
+            t = o.get("refreshTokenExpiresAt")
+            return bool(t) and t / 1000 < time.time()
+        except Exception:
+            return False
+
+    def login_expires_at(self):
+        """로그인 기간이 끝나는 시각(초, 갱신 토큰 만료) — 화면에서 미리 알려 주기용. 없으면 None."""
+        try:
+            _, o = self._load()
+            t = o.get("refreshTokenExpiresAt")
+            return t / 1000 if t else None
+        except Exception:
+            return None
 
     def _refresh_or_cli(self, d, o):
         """직접 갱신 → 429면 CLI에 맡기고 새로 저장된 토큰을 읽음."""
@@ -191,7 +223,8 @@ class PlanAPI:
     def _fetch(self):
         d, o = self._load()
         if not o.get("accessToken"):
-            raise RuntimeError("CLI 로그인 정보 없음")
+            self.login_required = True
+            raise RuntimeError("Claude 로그인이 풀렸어요 — 다시 로그인 필요")
         if (o.get("expiresAt") or 0) / 1000 < time.time() + 300:
             o = self._refresh_or_cli(d, o)
         req = urllib.request.Request(USAGE_URL, headers={
@@ -271,7 +304,8 @@ class PlanAPI:
         return {"error": self.error, "login_required": self.login_required, "manual_fails": self.manual_fails,
                 "cli_renew_at": self.cli_renew_at or None, "cli_renew_ok": self.cli_renew_ok,
                 "retry_in_sec": max(0, int(self.backoff_until - time.time())) if self.error else 0,
-                "last_ok": self.last["captured_at"] if self.last else None}
+                "last_ok": self.last["captured_at"] if self.last else None,
+                "login_expires_at": self.login_expires_at()}
 
 
 if __name__ == "__main__":

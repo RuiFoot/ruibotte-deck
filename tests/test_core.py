@@ -244,6 +244,32 @@ class PlanApiTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             api._refresh_or_cli(d, o)
 
+    def test_cli_wipes_login_is_failure(self):
+        """CLI가 로그인 정보를 비우면(갱신 토큰 만료) '성공'이 아니라 다시 로그인 필요 (2026-11-19 실제 사례)."""
+        import subprocess as sp
+        api = plan_api.PlanAPI(cred_path=self.cred, min_interval=0)
+        orig_popen, orig_find = sp.Popen, plan_api.find_claude_cli
+
+        class FakeCLI:
+            def __init__(s, *a, **k):
+                time.sleep(0.05)
+                self.cred.write_text(json.dumps({"claudeAiOauth": {"accessToken": "", "refreshToken": "", "expiresAt": 0}}))
+            def poll(s): return None
+            def kill(s): pass
+        plan_api.subprocess.Popen, plan_api.find_claude_cli = FakeCLI, lambda: "claude"
+        try:
+            self.assertFalse(api._cli_renew())
+            self.assertTrue(api.login_required)
+        finally:
+            plan_api.subprocess.Popen, plan_api.find_claude_cli = orig_popen, orig_find
+
+    def test_refresh_expired_skips_cli(self):
+        self.cred.write_text(json.dumps({"claudeAiOauth": {"accessToken": "a", "refreshToken": "r", "expiresAt": 0,
+                                                           "refreshTokenExpiresAt": int((time.time() - 60) * 1000)}}))
+        api = plan_api.PlanAPI(cred_path=self.cred, min_interval=0)
+        self.assertFalse(api._cli_renew())
+        self.assertTrue(api.login_required)
+
     def test_manual_refresh_gap(self):
         api = plan_api.PlanAPI(cred_path=self.cred, min_interval=0)
         api.snapshot = lambda: None

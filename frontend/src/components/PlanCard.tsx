@@ -164,10 +164,16 @@ export function LimitsCard({ pid, label, L, now, machineName, account, main = tr
       {pid === "claude" && main && api?.error && L?.source !== "api" && (
         <div className="plan-warn">
           ⚠ 정확한 계정 사용량 조회 실패 — {api.login_required
-            ? <>로그인이 만료됐어요. 터미널에서 <code>claude auth login</code>으로 다시 로그인하면 바로 복구돼요.</>
+            ? <>Claude 로그인 기간이 끝났어요. 아래 버튼으로 다시 로그인하면 바로 복구돼요 (브라우저에서 로그인).</>
             : <>{api.retry_in_sec > 0 ? `${Math.ceil(api.retry_in_sec / 60)}분 뒤 자동 재시도` : "곧 재시도"} ({api.error}) — '새로고침'으로 다시 시도하거나,
                 계속 실패하면 아래 버튼으로 다시 로그인하세요.</>}
           {L?.captured_at ? <> · 아래 숫자는 <b>{ago(now - L.captured_at)}</b> 기록{old ? "이라 지금과 다를 수 있어요" : ""}</> : ""}
+          <LoginButton />
+        </div>
+      )}
+      {pid === "claude" && main && !api?.error && api?.login_expires_at && api.login_expires_at - now < 2 * 86400 && (
+        <div className="plan-warn">
+          ⏳ Claude 로그인 기간이 <b>{fmtDur(Math.max(0, api.login_expires_at - now))}</b> 남았어요 — 끝나면 정확한 한도를 못 가져와요. 미리 다시 로그인하면 연장돼요.
           <LoginButton />
         </div>
       )}

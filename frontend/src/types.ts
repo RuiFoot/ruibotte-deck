@@ -82,7 +82,9 @@ export interface Limits {
   history: [number, number | null, number | null][];
 }
 
-export interface PlanApiStatus { error: string | null; login_required: boolean; retry_in_sec: number; last_ok: number | null; manual_fails?: number }
+export interface PlanApiStatus { error: string | null; login_required: boolean; retry_in_sec: number; last_ok: number | null; manual_fails?: number
+  login_expires_at?: number | null;   // Claude 로그인 기간(갱신 토큰) 끝나는 시각
+}
 
 // ---------- v2 ----------
 export interface SysPoint { ts: number; cpu: number | null; cpu_max: number | null; mem: number | null; swap: number | null; gpu: number | null; down: number | null; up: number | null }

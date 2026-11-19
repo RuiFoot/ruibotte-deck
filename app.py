@@ -621,6 +621,11 @@ def alerts_loop():
         try:
             v2 = _v2_state()
             ALERTS.check(v2.get("ai"), v2.get("machines"), v2.get("systems"), STATE.get("local"), _machine_names().get)
+            # Claude 로그인 기간(갱신 토큰)이 하루 안에 끝나면 미리 한 번 알림 — 끝나면 정확한 한도 조회가 멈춤
+            exp = PLAN["api"].login_expires_at() if PLAN.get("api") else None
+            if exp and 0 < exp - time.time() < 86400:
+                ALERTS._fire("limits", ("claude-login", int(exp)), "Claude 로그인이 곧 만료돼요",
+                             f"{time.strftime('%m/%d %H:%M', time.localtime(exp))}까지 · 대시보드 한도 카드의 '다시 로그인'으로 미리 연장하세요")
             ERRORS.pop("alerts", None)
         except Exception:
             ERRORS["alerts"] = traceback.format_exc(limit=3)
